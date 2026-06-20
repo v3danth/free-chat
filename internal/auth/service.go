@@ -11,10 +11,10 @@ import (
 
 type Service struct {
 	userRepo user.Repository
-	jwt      *jwt.JWTManager
+	jwt      *JWTManager
 }
 
-func NewService(repo user.Repository) *Service {
+func NewService(repo user.Repository, jwtSecret string) *Service {
 	return &Service{
 		userRepo: repo,
 		jwt:      NewJWTManager(jwtSecret),

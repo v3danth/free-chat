@@ -48,7 +48,7 @@ func (f *fakeUserRepo) GetByID(ctx context.Context, id uint64) (*user.User, erro
 
 func TestCreateGuestUser(t *testing.T) {
 	repo := newFakeRepo()
-	svc := auth.NewService(repo)
+	svc := auth.NewService(repo, "secret")
 
 	u, err := svc.CreateGuestUser(
 		context.Background(),

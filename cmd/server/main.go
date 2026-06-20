@@ -25,7 +25,8 @@ func main() {
 	userRepo := user.NewRepository(db)
 
 	// 4. Build service
-	authService := auth.NewService(userRepo)
+	jwtSecret := cfg.JWTSecret
+	authService := auth.NewService(userRepo, jwtSecret)
 
 	// 5. Build handler
 	authHandler := auth.NewHandler(authService)

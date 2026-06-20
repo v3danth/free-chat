@@ -32,3 +32,24 @@ func (j *JWTManager) Generate(userID uint64) (string, error) {
 
 	return token.SignedString([]byte(j.secret))
 }
+
+func (j *JWTManager) Validate(tokenStr string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(
+		tokenStr,
+		&Claims{},
+		func(token *jwt.Token) (interface{}, error) {
+			return []byte(j.secret), nil
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		return nil, err
+	}
+
+	return claims, nil
+}
