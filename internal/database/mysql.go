@@ -28,8 +28,8 @@ func New(cfg *config.Config) (*sql.DB, error) {
 	// Connection pool settings.
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(10)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	db.SetConnMaxIdleTime(2 * time.Minute)
+	db.SetConnMaxLifetime(10 * time.Minute)
+	db.SetConnMaxIdleTime(8 * time.Minute)
 
 	if err := db.Ping(); err != nil {
 		return nil, err

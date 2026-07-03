@@ -3,7 +3,7 @@ CREATE TABLE users (
 
     user_type ENUM('guest', 'registered') NOT NULL,
 
-    username VARCHAR(32) NOT NULL UNIQUE,
+    username VARCHAR(32) NOT NULL,
 
     gender ENUM(
         'male',
@@ -11,7 +11,7 @@ CREATE TABLE users (
         'non-binary',
         'femboy',
         'other',
-        'couple'
+        'couple' -- can we add more options here?
     ) NOT NULL,
 
     age TINYINT UNSIGNED NOT NULL,
@@ -22,6 +22,10 @@ CREATE TABLE users (
 
     password_hash VARCHAR(255) NULL,
 
+    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+
+    last_seen_at TIMESTAMP NULL,
+
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -29,5 +33,6 @@ CREATE TABLE users (
 
     INDEX idx_user_type (user_type),
     INDEX idx_email (email),
-    INDEX idx_username (username)
+    INDEX idx_guest_active (username, user_type, status),
+    INDEX idx_status_last_seen (status, last_seen_at)
 );

@@ -1,2 +1,7 @@
 go.sum
 .env
+
+node_modules
+uploads
+bin
+.DS_Store

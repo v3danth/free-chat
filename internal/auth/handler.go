@@ -12,12 +12,9 @@ type Handler struct {
 }
 
 func NewHandler(service *Service) *Handler {
-	return &Handler{
-		service: service,
-	}
+	return &Handler{service: service}
 }
 
-// Guest Signup Handler
 type guestRequest struct {
 	Username string      `json:"username"`
 	Gender   user.Gender `json:"gender"`
@@ -26,30 +23,46 @@ type guestRequest struct {
 }
 
 func (h *Handler) CreateGuest(w http.ResponseWriter, r *http.Request) {
-	var req guestRequest
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	u, err := h.service.CreateGuestUser(
+	var req guestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Username == "" {
+		http.Error(w, "username is required", http.StatusBadRequest)
+		return
+	}
+
+	token, u, err := h.service.CreateGuestUser(
 		r.Context(),
 		req.Username,
 		req.Gender,
 		req.Age,
 		req.About,
 	)
-
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
 
-	json.NewEncoder(w).Encode(u)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(guestResponse{
+		Token: token,
+		User:  u,
+	})
 }
 
-// Registered user Handler
+type guestResponse struct {
+	Token string     `json:"token"`
+	User  *user.User `json:"user"`
+}
+
 type registerRequest struct {
 	Username string      `json:"username"`
 	Email    string      `json:"email"`
@@ -60,10 +73,19 @@ type registerRequest struct {
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	var req registerRequest
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
+	var req registerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Username == "" || req.Email == "" || req.Password == "" {
+		http.Error(w, "username, email, and password are required", http.StatusBadRequest)
 		return
 	}
 
@@ -76,37 +98,47 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		req.Age,
 		req.About,
 	)
-
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(u)
 }
 
-// Registered user login Handler
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	var req loginRequest
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	token, user, err := h.service.Login(r.Context(), req.Email, req.Password)
+	var req loginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	token, u, err := h.service.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"token": token,
-		"user":  user,
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(loginResponse{
+		Token: token,
+		User:  u,
 	})
+}
+
+type loginResponse struct {
+	Token string     `json:"token"`
+	User  *user.User `json:"user"`
 }
