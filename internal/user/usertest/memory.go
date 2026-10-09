@@ -3,7 +3,9 @@
 package usertest
 
 import (
+	"cmp"
 	"context"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -59,9 +61,9 @@ func (m *Memory) GetByEmail(_ context.Context, email string) (user.User, error) 
 	return user.User{}, user.ErrNotFound
 }
 
-func (m *Memory) UpdateCard(_ context.Context, id uint64, intent user.Intent, about, location string, photoID *uint64) error {
+func (m *Memory) UpdateCard(_ context.Context, id uint64, tags []string, about, location string, photoID *uint64) error {
 	return m.update(id, func(u *user.User) {
-		u.Profile.Intent, u.Profile.About, u.Profile.Location, u.PhotoID = intent, about, location, photoID
+		u.Profile.Tags, u.Profile.About, u.Profile.Location, u.PhotoID = tags, about, location, photoID
 	})
 }
 
@@ -87,6 +89,27 @@ func (m *Memory) SetMute(_ context.Context, id uint64, until *time.Time) error {
 }
 
 // Delete simulates retention removing an account.
+func (m *Memory) ListStaff(context.Context) ([]user.User, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var staff []user.User
+	for _, u := range m.byID {
+		if u.Role.AtLeast(user.RoleModerator) {
+			staff = append(staff, u)
+		}
+	}
+	slices.SortFunc(staff, func(a, b user.User) int {
+		if (a.Role == user.RoleAdmin) != (b.Role == user.RoleAdmin) {
+			if a.Role == user.RoleAdmin {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return staff, nil
+}
+
 func (m *Memory) Delete(id uint64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

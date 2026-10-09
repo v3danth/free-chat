@@ -22,7 +22,7 @@ var upgrader = websocket.Upgrader{
 
 type Profiles interface {
 	GetByID(ctx context.Context, id uint64) (user.User, error)
-	UpdateCard(ctx context.Context, id uint64, intent user.Intent, about, location string, photoID *uint64) error
+	UpdateCard(ctx context.Context, id uint64, tags []string, about, location string, photoID *uint64) error
 }
 
 func Routes(mux *http.ServeMux, hub *Hub, authSvc *auth.Service, profiles Profiles, ipOf httpx.IPResolver) {
@@ -75,20 +75,23 @@ func (h handler) me(w http.ResponseWriter, r *http.Request, id auth.Identity) {
 // cardUpdate is a partial update: an absent field keeps its value. PhotoID
 // stays raw to tell "absent" (keep) from null (clear).
 type cardUpdate struct {
-	Intent   *string         `json:"intent"`
+	Tags     *[]string       `json:"tags"`
 	About    *string         `json:"about"`
 	Location *string         `json:"location"`
 	PhotoID  json.RawMessage `json:"photo_id"`
 }
 
-var errPhotoID = apperr.New(apperr.Invalid, "photo_id must be an image id or null")
+var (
+	errPhotoID    = apperr.New(apperr.Invalid, "photo_id must be an image id or null")
+	errGuestPhoto = apperr.New(apperr.Forbidden, "create an account to add a profile photo")
+)
 
 // apply merges the update into the current card, parsing each field it sets.
 func (req cardUpdate) apply(u user.User) (user.Profile, *uint64, error) {
 	p := u.Profile
 	var err error
-	if req.Intent != nil {
-		if p.Intent, err = user.ParseIntent(*req.Intent); err != nil {
+	if req.Tags != nil {
+		if p.Tags, err = user.ParseTags(*req.Tags); err != nil {
 			return p, nil, err
 		}
 	}
@@ -113,6 +116,9 @@ func (req cardUpdate) apply(u user.User) (user.Profile, *uint64, error) {
 			var id uint64
 			if json.Unmarshal(req.PhotoID, &id) != nil || id == 0 {
 				return p, nil, errPhotoID
+			}
+			if u.Kind != user.KindMember {
+				return p, nil, errGuestPhoto // guests are their face; photos are for members
 			}
 			photo = &id
 		}
@@ -143,7 +149,7 @@ func (h handler) updateMe(w http.ResponseWriter, r *http.Request, id auth.Identi
 		return
 	}
 
-	if err := h.profiles.UpdateCard(r.Context(), id.UserID, p.Intent, p.About, p.Location, photo); err != nil {
+	if err := h.profiles.UpdateCard(r.Context(), id.UserID, p.Tags, p.About, p.Location, photo); err != nil {
 		httpx.Error(w, err)
 		return
 	}

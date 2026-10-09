@@ -21,8 +21,8 @@ func Routes(mux *http.ServeMux, svc *Service, ipOf httpx.IPResolver) {
 		svc.CreateGuest, toSessionView))
 
 	mux.Handle("POST /auth/register", httpx.Endpoint(http.StatusCreated,
-		func(r *http.Request, in registerRequest) (Registration, error) {
-			reg, err := in.parse()
+		func(r *http.Request, in RegisterRequest) (Registration, error) {
+			reg, err := in.Parse()
 			reg.Origin = origin(r)
 			return reg, err
 		},
@@ -68,7 +68,9 @@ var errForbidden = apperr.New(apperr.Forbidden, "you do not have permission to d
 
 // --- inbound ---
 
-type registerRequest struct {
+// RegisterRequest is the body of a member sign-up, also used by the admin
+// to create staff accounts.
+type RegisterRequest struct {
 	user.ProfileInput
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -79,7 +81,7 @@ var (
 	errPassword = apperr.New(apperr.Invalid, "password must be 8-72 bytes")
 )
 
-func (r registerRequest) parse() (Registration, error) {
+func (r RegisterRequest) Parse() (Registration, error) {
 	profile, err := r.ProfileInput.Parse()
 	if err != nil {
 		return Registration{}, err

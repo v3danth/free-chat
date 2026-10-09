@@ -7,21 +7,22 @@ import (
 	"github.com/v3danth/free-chat/internal/mediapath"
 )
 
-// Card is what everyone online sees. The photo is the blurred variant; the
-// sharp one is only sent to people a user has opened a door with.
+// Card is what everyone online sees: the pixel face, never the photo. A
+// member's photo is only sent to people they have opened a door with;
+// HasPhoto lets the other side know there is one to look forward to.
 type Card struct {
-	ID          uint64 `json:"id"`
-	Kind        Kind   `json:"kind"`
-	Role        Role   `json:"role"`
-	Name        string `json:"name"`
-	Gender      Gender `json:"gender"`
-	Age         uint8  `json:"age"`
-	Intent      Intent `json:"intent"`
-	About       string `json:"about,omitempty"`
-	Location    string `json:"location,omitempty"`
-	Country     string `json:"country,omitempty"`
-	PhotoBlur   string `json:"photo_blur_url,omitempty"`
-	OnlineSince int64  `json:"online_since,omitempty"`
+	ID          uint64   `json:"id"`
+	Kind        Kind     `json:"kind"`
+	Role        Role     `json:"role"`
+	Name        string   `json:"name"`
+	Gender      Gender   `json:"gender"`
+	Age         uint8    `json:"age"`
+	Tags        []string `json:"tags"`
+	About       string   `json:"about,omitempty"`
+	Location    string   `json:"location,omitempty"`
+	Country     string   `json:"country,omitempty"`
+	HasPhoto    bool     `json:"has_photo,omitempty"`
+	OnlineSince int64    `json:"online_since,omitempty"`
 	// Avatar is the pixel face drawn from the name; everyone has one.
 	Avatar     string `json:"avatar_url"`
 	AvatarTier string `json:"avatar_tier"`
@@ -47,16 +48,14 @@ func ToCard(u User, onlineSince time.Time) Card {
 		Name:     u.Profile.Name,
 		Gender:   u.Profile.Gender,
 		Age:      u.Profile.Age,
-		Intent:   u.Profile.Intent,
+		Tags:     u.Profile.Tags,
 		About:    u.Profile.About,
 		Location: u.Profile.Location,
 		Country:  u.Country,
 	}
 	face := avatar.For(u.Profile.Name)
 	c.Avatar, c.AvatarTier = avatar.URL(u.Profile.Name), face.Tier
-	if u.PhotoKey != nil {
-		c.PhotoBlur = mediapath.URL(mediapath.Blur, *u.PhotoKey)
-	}
+	c.HasPhoto = u.PhotoKey != nil
 	if !onlineSince.IsZero() {
 		c.OnlineSince = onlineSince.Unix()
 	}

@@ -22,7 +22,8 @@ func TestProfileInputParse(t *testing.T) {
 		{"hindi name with matras", with(func(in *ProfileInput) { in.Name = "राहुल" }), true},
 		{"tamil name", with(func(in *ProfileInput) { in.Name = "கார்த்திக்" }), true},
 		{"inner space", with(func(in *ProfileInput) { in.Name = "Ravi  K" }), true},
-		{"intent defaults to talk", with(func(in *ProfileInput) { in.Intent = "" }), true},
+		{"no tags", with(func(in *ProfileInput) { in.Tags = nil }), true},
+		{"free-form tags in any script", with(func(in *ProfileInput) { in.Tags = []string{"night owl", "K-pop", "क्रिकेट"} }), true},
 		{"location with punctuation", with(func(in *ProfileInput) { in.Location = "St. John's, NL" }), true},
 		{"empty location", with(func(in *ProfileInput) { in.Location = "" }), true},
 		{"name too short", with(func(in *ProfileInput) { in.Name = "a" }), false},
@@ -32,7 +33,9 @@ func TestProfileInputParse(t *testing.T) {
 		{"under 18", with(func(in *ProfileInput) { in.Age = 17 }), false},
 		{"over 99", with(func(in *ProfileInput) { in.Age = 120 }), false},
 		{"unknown gender", with(func(in *ProfileInput) { in.Gender = "robot" }), false},
-		{"unknown intent", with(func(in *ProfileInput) { in.Intent = "party" }), false},
+		{"four tags", with(func(in *ProfileInput) { in.Tags = []string{"a", "b", "c", "d"} }), false},
+		{"tag too long", with(func(in *ProfileInput) { in.Tags = []string{strings.Repeat("a", 21)} }), false},
+		{"tag markup", with(func(in *ProfileInput) { in.Tags = []string{"<b>hi</b>"} }), false},
 		{"about too long", with(func(in *ProfileInput) { in.About = strings.Repeat("é", 141) }), false},
 		{"location too long", with(func(in *ProfileInput) { in.Location = strings.Repeat("a", 41) }), false},
 		{"location markup", with(func(in *ProfileInput) { in.Location = "<script>" }), false},
@@ -43,8 +46,8 @@ func TestProfileInputParse(t *testing.T) {
 			if (err == nil) != tt.ok {
 				t.Fatalf("ok = %v, err = %v", tt.ok, err)
 			}
-			if tt.ok && p.Intent == "" {
-				t.Fatal("intent must always be set")
+			if tt.ok && p.Tags == nil {
+				t.Fatal("tags must never be nil, so they encode as []")
 			}
 		})
 	}
@@ -80,5 +83,16 @@ func TestRoleLadder(t *testing.T) {
 	}
 	if !RoleModerator.AtLeast(RoleModerator) || RoleUser.AtLeast(RoleModerator) {
 		t.Fatal("AtLeast is inclusive")
+	}
+}
+
+func TestParseTags(t *testing.T) {
+	got, err := ParseTags([]string{"  night   owl ", "Night Owl", "", "music"})
+	if err != nil || strings.Join(got, "|") != "night owl|music" {
+		t.Fatalf("got %q, %v; want spaces collapsed, blanks and case-duplicates dropped", got, err)
+	}
+	// Duplicates do not count towards the limit.
+	if _, err := ParseTags([]string{"a", "A", "b", "c"}); err != nil {
+		t.Fatalf("three distinct tags must pass: %v", err)
 	}
 }

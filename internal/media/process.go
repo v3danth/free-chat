@@ -16,7 +16,6 @@ import (
 const (
 	fullMax   = 1280
 	thumbMax  = 320
-	blurMax   = 16 // downscale this far, then upscale: nothing recognisable survives
 	maxPixels = 40_000_000
 	maxSide   = 12_000
 )
@@ -28,7 +27,6 @@ type Processed struct {
 	SHA256        [32]byte
 	Width, Height int
 	Full, Thumb   []byte
-	Blur          []byte
 }
 
 // Process is pure: same bytes in, same bytes out.
@@ -56,16 +54,13 @@ func Process(raw []byte) (Processed, error) {
 
 	full := fit(src, fullMax, draw.CatmullRom)
 	thumb := fit(src, thumbMax, draw.ApproxBiLinear)
-	tiny := fit(thumb, blurMax, draw.ApproxBiLinear)
-	blur := image.NewRGBA(thumb.Bounds())
-	draw.BiLinear.Scale(blur, blur.Bounds(), tiny, tiny.Bounds(), draw.Src, nil)
 
 	p := Processed{SHA256: sha256.Sum256(raw), Width: full.Bounds().Dx(), Height: full.Bounds().Dy()}
 	for _, v := range []struct {
 		img *image.RGBA
 		q   int
 		out *[]byte
-	}{{full, 82, &p.Full}, {thumb, 75, &p.Thumb}, {blur, 60, &p.Blur}} {
+	}{{full, 82, &p.Full}, {thumb, 75, &p.Thumb}} {
 		var buf bytes.Buffer
 		if err := jpeg.Encode(&buf, v.img, &jpeg.Options{Quality: v.q}); err != nil {
 			return Processed{}, err

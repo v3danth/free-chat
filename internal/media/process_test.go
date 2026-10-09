@@ -41,7 +41,7 @@ func TestProcessVariants(t *testing.T) {
 		name string
 		data []byte
 		w, h int
-	}{{"full", p.Full, 1280, 640}, {"thumb", p.Thumb, 320, 160}, {"blur", p.Blur, 320, 160}} {
+	}{{"full", p.Full, 1280, 640}, {"thumb", p.Thumb, 320, 160}} {
 		if w, h := dims(t, v.data); w != v.w || h != v.h {
 			t.Errorf("%s = %dx%d, want %dx%d", v.name, w, h, v.w, v.h)
 		}
@@ -71,7 +71,7 @@ func TestProcessStripsMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, v := range [][]byte{p.Full, p.Thumb, p.Blur} {
+	for _, v := range [][]byte{p.Full, p.Thumb} {
 		if bytes.Contains(v, []byte("GPSLatitude")) || bytes.Contains(v, []byte("Exif")) {
 			t.Fatal("re-encoded image still carries EXIF data")
 		}

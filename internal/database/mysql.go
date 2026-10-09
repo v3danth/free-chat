@@ -53,10 +53,7 @@ func Open(ctx context.Context, cfg Config) (*sql.DB, error) {
 	return db, nil
 }
 
-const (
-	errDuplicateKey = 1062
-	errMissingRef   = 1452
-)
+const errDuplicateKey = 1062
 
 func IsDuplicateKey(err error) bool { return hasCode(err, errDuplicateKey) }
 
@@ -65,9 +62,6 @@ func IsDuplicateKeyOn(err error, index string) bool {
 	var me *mysql.MySQLError
 	return errors.As(err, &me) && me.Number == errDuplicateKey && strings.Contains(me.Message, index)
 }
-
-// IsMissingReference reports a foreign-key violation on insert/update.
-func IsMissingReference(err error) bool { return hasCode(err, errMissingRef) }
 
 func hasCode(err error, code uint16) bool {
 	var me *mysql.MySQLError

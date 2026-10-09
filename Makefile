@@ -1,296 +1,113 @@
 # =============================================================================
-# Free Chat - Makefile
+# Drift - Makefile. Run `make help` for the list.
 # =============================================================================
 
-.PHONY: all build run test test-coverage test-integration fmt lint clean \
-		mysql-start mysql-stop mysql-restart mysql-status mysql-create \
-		mysql-drop mysql-reset migrate migrate-test migrate-up migrate-down \
-		deps tidy generate help docker-build docker-run docker-stop geoip
+.PHONY: start build run dev test test-coverage fmt lint vet tidy \
+        db-create db-drop db-reset migrate migrate-test geoip clean help
 
-# -----------------------------------------------------------------------------
-# Variables
-# -----------------------------------------------------------------------------
+# Database settings come from .env (the same ones the server uses).
+-include .env
 
-APP_NAME := free-chat
-BUILD_DIR := ./bin
-MAIN_FILE := ./cmd/server/main.go
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS := -ldflags "-X main.version=$(VERSION)"
+BUILD_DIR      := ./bin
+APP            := $(BUILD_DIR)/server
+MYSQL_HOST     ?= localhost
+MYSQL_PORT     ?= 3306
+MYSQL_USER     ?= root
+MYSQL_DATABASE ?= chat_db
+DB_TEST        ?= chat_db_test
+# The password goes through the environment, never the command line.
+MYSQL          := MYSQL_PWD='$(MYSQL_PASSWORD)' mysql -h $(MYSQL_HOST) -P $(MYSQL_PORT) -u $(MYSQL_USER)
 
-# Go
-GOCMD := go
-GOBUILD := $(GOCMD) build
-GOTEST := $(GOCMD) test
-GOGET := $(GOCMD) get
-GOFMT := gofmt
-GOVET := $(GOCMD) vet
-
-# MySQL
-MYSQL_USER ?= root
-MYSQL_PASS ?= passwd
-MYSQL_HOST ?= localhost
-MYSQL_PORT ?= 3306
-DB_NAME ?= chat_db
-DB_TEST ?= chat_db_test
-
-# Docker
-DOCKER_IMAGE := $(APP_NAME)
-DOCKER_TAG := $(VERSION)
-
-# Colors
-GREEN := \033[0;32m
+GREEN  := \033[0;32m
 YELLOW := \033[0;33m
-RED := \033[0;31m
-NC := \033[0m # No Color
+NC     := \033[0m
+say     = @printf '%b\n' "$(YELLOW)$(1)$(NC)"
+done    = @printf '%b\n' "$(GREEN)$(1)$(NC)"
 
 # -----------------------------------------------------------------------------
-# Main targets
+# Run
 # -----------------------------------------------------------------------------
 
-all: fmt lint test build
-	@printf '%b\n' "$(GREEN) All checks passed$(NC)"
+start: ## Check MySQL, the schema and the port, then build and run
+	@scripts/start.sh
 
-build:
-	@printf '%b\n' "$(YELLOW)Building...$(NC)"
+build: ## Build the server into bin/server
+	$(call say,Building...)
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_FILE)
-	@printf '%b\n' "$(GREEN) Build complete: $(BUILD_DIR)/$(APP_NAME)$(NC)"
+	go build -o $(APP) ./cmd/server
+	$(call done,Built $(APP))
 
-run: build
-	@printf '%b\n' "$(YELLOW)Running server...$(NC)"
-	$(BUILD_DIR)/$(APP_NAME)
+run: build ## Build and run without the start checks
+	$(APP)
 
-dev:
-	@printf '%b\n' "$(YELLOW)Running in development mode...$(NC)"
-	$(GOCMD) run $(MAIN_FILE)
+dev: ## Run with go run
+	go run ./cmd/server
 
 # -----------------------------------------------------------------------------
-# Testing
+# Quality
 # -----------------------------------------------------------------------------
 
-test:
-	@printf '%b\n' "$(YELLOW)Running tests...$(NC)"
-	$(GOTEST) -v -race -count=1 -short ./...
-	@printf '%b\n' "$(GREEN) Tests passed$(NC)"
+test: ## Run all tests with the race detector (database tests use $(DB_TEST))
+	@echo "go test -race -count=1 ./...  (database tests on $(DB_TEST))"
+	@TEST_MYSQL_DATABASE=$(DB_TEST) MYSQL_HOST=$(MYSQL_HOST) MYSQL_PORT=$(MYSQL_PORT) MYSQL_USER=$(MYSQL_USER) \
+	 MYSQL_PASSWORD='$(MYSQL_PASSWORD)' go test -race -count=1 ./...
 
-test-coverage:
-	@printf '%b\n' "$(YELLOW)Running tests with coverage...$(NC)"
-	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./...
-	$(GOCMD) tool cover -html=coverage.out -o coverage.html
-	@printf '%b\n' "$(GREEN) Coverage report: coverage.html$(NC)"
+test-coverage: ## Write coverage.html
+	go test -race -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	$(call done,Coverage report: coverage.html)
 
-test-integration:
-	@printf '%b\n' "$(YELLOW)Running integration tests...$(NC)"
-	$(GOTEST) -v -race -count=1 -tags=integration ./...
-	@printf '%b\n' "$(GREEN) Integration tests passed$(NC)"
+fmt: ## Format all Go code
+	gofmt -w .
 
-test-verbose:
-	$(GOTEST) -v -race -count=1 ./...
+vet: ## Run go vet
+	go vet ./...
 
-# -----------------------------------------------------------------------------
-# Code quality
-# -----------------------------------------------------------------------------
+lint: vet ## go vet, plus golangci-lint when installed
+	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run ./...; \
+	else printf '%b\n' "$(YELLOW)golangci-lint not installed, ran go vet only$(NC)"; fi
 
-fmt:
-	@printf '%b\n' "$(YELLOW)Formatting code...$(NC)"
-	$(GOFMT) -w .
-	@printf '%b\n' "$(GREEN) Code formatted$(NC)"
-
-lint:
-	@printf '%b\n' "$(YELLOW)Linting...$(NC)"
-	$(GOVET) ./...
-	@if command -v golangci-lint > /dev/null 2>&1; then \
-		golangci-lint run ./...; \
-	else \
-		echo -e "$(YELLOW)golangci-lint not installed, skipping advanced linting$(NC)"; \
-		echo -e "$(YELLOW)Install with: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin$(NC)"; \
-	fi
-	@printf '%b\n' "$(GREEN) Lint passed$(NC)"
-
-vet:
-	$(GOVET) ./...
-
-# -----------------------------------------------------------------------------
-# Dependencies
-# -----------------------------------------------------------------------------
-
-deps:
-	@printf '%b\n' "$(YELLOW)Downloading dependencies...$(NC)"
-	$(GOGET) -v -d ./...
-
-tidy:
-	@printf '%b\n' "$(YELLOW)Tidying modules...$(NC)"
-	$(GOCMD) mod tidy
-	@printf '%b\n' "$(GREEN) Modules tidied$(NC)"
-
-generate:
-	@printf '%b\n' "$(YELLOW)Generating code...$(NC)"
-	$(GOCMD) generate ./...
+tidy: ## Tidy go.mod
+	go mod tidy
 
 # -----------------------------------------------------------------------------
 # Database
 # -----------------------------------------------------------------------------
 
-mysql-start:
-	@printf '%b\n' "$(YELLOW)Starting MySQL...$(NC)"
-	@if command -v mysql.server > /dev/null 2>&1; then \
-		mysql.server start; \
-	elif command -v systemctl > /dev/null 2>&1; then \
-		sudo systemctl start mysql; \
-	elif command -v service > /dev/null 2>&1; then \
-		sudo service mysql start; \
-	else \
-		echo -e "$(RED)Cannot determine how to start MySQL$(NC)"; \
-		exit 1; \
-	fi
-	@printf '%b\n' "$(GREEN) MySQL started$(NC)"
+db-create: ## Create the app and test databases
+	@$(MYSQL) -e "CREATE DATABASE IF NOT EXISTS $(MYSQL_DATABASE) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; CREATE DATABASE IF NOT EXISTS $(DB_TEST) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+	$(call done,Databases ready)
 
-mysql-stop:
-	@printf '%b\n' "$(YELLOW)Stopping MySQL...$(NC)"
-	@if command -v mysql.server > /dev/null 2>&1; then \
-		mysql.server stop; \
-	elif command -v systemctl > /dev/null 2>&1; then \
-		sudo systemctl stop mysql; \
-	elif command -v service > /dev/null 2>&1; then \
-		sudo service mysql stop; \
-	fi
-	@printf '%b\n' "$(GREEN) MySQL stopped$(NC)"
+db-drop: ## Drop the app and test databases (deletes all data)
+	@$(MYSQL) -e "DROP DATABASE IF EXISTS $(MYSQL_DATABASE); DROP DATABASE IF EXISTS $(DB_TEST);"
+	$(call done,Databases dropped)
 
-mysql-restart: mysql-stop mysql-start
+db-reset: db-drop db-create migrate migrate-test ## Drop, create and migrate both databases
 
-mysql-status:
-	@if command -v mysql.server > /dev/null 2>&1; then \
-		mysql.server status; \
-	elif command -v systemctl > /dev/null 2>&1; then \
-		sudo systemctl status mysql --no-pager; \
-	else \
-		echo "MySQL status unknown"; \
-	fi
+migrate: ## Apply migrations/*.sql to the app database
+	@for f in migrations/*.sql; do echo "  $$f"; $(MYSQL) $(MYSQL_DATABASE) < $$f || exit 1; done
+	$(call done,Migrations applied)
 
-mysql-create:
-	@printf '%b\n' "$(YELLOW)Creating databases...$(NC)"
-	mysql -u $(MYSQL_USER) $(if $(MYSQL_PASS),-p$(MYSQL_PASS),) -e "CREATE DATABASE IF NOT EXISTS $(DB_NAME);"
-	mysql -u $(MYSQL_USER) $(if $(MYSQL_PASS),-p$(MYSQL_PASS),) -e "CREATE DATABASE IF NOT EXISTS $(DB_TEST);"
-	@printf '%b\n' "$(GREEN) Databases created$(NC)"
-
-mysql-drop:
-	@printf '%b\n' "$(RED)Dropping databases...$(NC)"
-	mysql -u $(MYSQL_USER) $(if $(MYSQL_PASS),-p$(MYSQL_PASS),) -e "DROP DATABASE IF EXISTS $(DB_NAME);"
-	mysql -u $(MYSQL_USER) $(if $(MYSQL_PASS),-p$(MYSQL_PASS),) -e "DROP DATABASE IF EXISTS $(DB_TEST);"
-	@printf '%b\n' "$(GREEN) Databases dropped$(NC)"
-
-mysql-reset: mysql-drop mysql-create migrate
+migrate-test: ## Apply migrations/*.sql to the test database
+	@for f in migrations/*.sql; do echo "  $$f"; $(MYSQL) $(DB_TEST) < $$f || exit 1; done
+	$(call done,Test migrations applied)
 
 # -----------------------------------------------------------------------------
-# Migrations
+# Other
 # -----------------------------------------------------------------------------
 
-migrate: migrate-up
-
-migrate-up:
-	@printf '%b\n' "$(YELLOW)Running migrations...$(NC)"
-	@for f in migrations/*.sql; do echo "  $$f"; mysql -u $(MYSQL_USER) $(if $(MYSQL_PASS),-p$(MYSQL_PASS),) $(DB_NAME) < $$f || exit 1; done
-	@printf '%b\n' "$(GREEN) Migrations complete$(NC)"
-
-migrate-test:
-	@printf '%b\n' "$(YELLOW)Running test migrations...$(NC)"
-	@for f in migrations/*.sql; do echo "  $$f"; mysql -u $(MYSQL_USER) $(if $(MYSQL_PASS),-p$(MYSQL_PASS),) $(DB_TEST) < $$f || exit 1; done
-	@printf '%b\n' "$(GREEN) Test migrations complete$(NC)"
-
-# -----------------------------------------------------------------------------
-# Docker
-# -----------------------------------------------------------------------------
-
-docker-build:
-	@printf '%b\n' "$(YELLOW)Building Docker image...$(NC)"
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
-	docker tag $(DOCKER_IMAGE):$(DOCKER_TAG) $(DOCKER_IMAGE):latest
-	@printf '%b\n' "$(GREEN) Docker image built$(NC)"
-
-docker-run: docker-build
-	@printf '%b\n' "$(YELLOW)Running Docker container...$(NC)"
-	docker run -d --name $(APP_NAME) -p 8080:8080 --env-file .env $(DOCKER_IMAGE):latest
-	@printf '%b\n' "$(GREEN) Container running$(NC)"
-
-docker-stop:
-	@printf '%b\n' "$(YELLOW)Stopping Docker container...$(NC)"
-	docker stop $(APP_NAME) || true
-	docker rm $(APP_NAME) || true
-	@printf '%b\n' "$(GREEN) Container stopped$(NC)"
-
-# -----------------------------------------------------------------------------
-# GeoIP (country flags). DB-IP "IP to Country Lite", CC BY 4.0, monthly.
-# -----------------------------------------------------------------------------
-
+# DB-IP "IP to Country Lite", CC BY 4.0, published monthly.
 GEOIP_MONTH ?= $(shell date +%Y-%m)
 
-geoip:
-	@printf '%b\n' "$(YELLOW)Downloading DB-IP country database ($(GEOIP_MONTH))...$(NC)"
+geoip: ## Download the country database used for flags
+	$(call say,Downloading DB-IP country database ($(GEOIP_MONTH))...)
 	@mkdir -p data
 	curl -fsSL "https://download.db-ip.com/free/dbip-country-lite-$(GEOIP_MONTH).mmdb.gz" | gunzip > data/dbip-country-lite.mmdb
-	@printf '%b\n' "$(GREEN) Saved data/dbip-country-lite.mmdb$(NC)"
+	$(call done,Saved data/dbip-country-lite.mmdb)
 
-# -----------------------------------------------------------------------------
-# Cleanup
-# -----------------------------------------------------------------------------
+clean: ## Remove build output, coverage files and uploaded images
+	rm -rf $(BUILD_DIR) coverage.out coverage.html
+	rm -rf uploads/full/* uploads/thumb/*
 
-clean:
-	@printf '%b\n' "$(YELLOW)Cleaning...$(NC)"
-	rm -rf $(BUILD_DIR)
-	rm -f coverage.out coverage.html
-	rm -rf uploads/full/* uploads/thumb/* uploads/blur/*
-	@printf '%b\n' "$(GREEN) Cleaned$(NC)"
-
-# -----------------------------------------------------------------------------
-# Help
-# -----------------------------------------------------------------------------
-
-help:
-	@echo ""
-	@printf '%b\n' "$(GREEN)Free Chat - Available Commands$(NC)"
-	@echo ""
-	@echo "  $(YELLOW)Build & Run:$(NC)"
-	@echo "	make build		  - Build the application"
-	@echo "	make run			- Build and run the application"
-	@echo "	make dev			- Run with go run (no build)"
-	@echo "	make all			- Format, lint, test, and build"
-	@echo ""
-	@echo "  $(YELLOW)Testing:$(NC)"
-	@echo "	make test		   - Run unit tests"
-	@echo "	make test-coverage  - Run tests with coverage report"
-	@echo "	make test-integration - Run integration tests"
-	@echo "	make test-verbose   - Run tests with verbose output"
-	@echo ""
-	@echo "  $(YELLOW)Code Quality:$(NC)"
-	@echo "	make fmt			- Format code with gofmt"
-	@echo "	make lint		   - Run linters"
-	@echo "	make vet			- Run go vet"
-	@echo ""
-	@echo "  $(YELLOW)Dependencies:$(NC)"
-	@echo "	make deps		   - Download dependencies"
-	@echo "	make tidy		   - Tidy go modules"
-	@echo "	make generate	   - Run go generate"
-	@echo ""
-	@echo "  $(YELLOW)Database:$(NC)"
-	@echo "	make mysql-start	- Start MySQL server"
-	@echo "	make mysql-stop	 - Stop MySQL server"
-	@echo "	make mysql-restart  - Restart MySQL server"
-	@echo "	make mysql-status   - Show MySQL status"
-	@echo "	make mysql-create   - Create databases"
-	@echo "	make mysql-drop	 - Drop databases"
-	@echo "	make mysql-reset	- Drop, create, and migrate"
-	@echo ""
-	@echo "  $(YELLOW)Migrations:$(NC)"
-	@echo "	make migrate		- Run all migrations"
-	@echo "	make migrate-test   - Run migrations on test DB"
-	@echo ""
-	@echo "  $(YELLOW)Docker:$(NC)"
-	@echo "	make docker-build   - Build Docker image"
-	@echo "	make docker-run	 - Build and run container"
-	@echo "	make docker-stop	- Stop and remove container"
-	@echo ""
-	@echo "  $(YELLOW)Other:$(NC)"
-	@echo "	make geoip		  - Download the country database for flags"
-	@echo "	make clean		  - Remove build artifacts"
-	@echo "	make help		   - Show this help"
-	@echo ""
+help: ## Show this list
+	@grep -hE '^[a-z-]+:.*## ' Makefile | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'

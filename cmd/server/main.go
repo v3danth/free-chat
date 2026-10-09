@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/v3danth/free-chat/internal/admin"
 	"github.com/v3danth/free-chat/internal/auth"
 	"github.com/v3danth/free-chat/internal/avatar"
 	"github.com/v3danth/free-chat/internal/block"
@@ -113,6 +114,7 @@ func run() error {
 	media.Routes(mux, mediaSvc, authSvc, ipOf, cfg.MediaMaxUploadSize)
 	websocket.Routes(mux, hub, authSvc, users, ipOf)
 	moderation.Routes(mux, modSvc, authSvc, ipOf)
+	admin.Routes(mux, admin.NewService(db, hub, users, authSvc, modStore), authSvc, ipOf)
 
 	go janitor.Run(ctx, janitor.NewMySQLStore(db), mediaSvc, hub, janitor.Config{
 		Retention: cfg.Retention, Interval: cfg.JanitorInterval,

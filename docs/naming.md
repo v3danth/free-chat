@@ -6,12 +6,16 @@ Decided 2026-10-09.
 
 | | |
 |---|---|
-| Brand | **Free Online Chat India** |
-| Primary domain | **freeonlinechatindia.com** |
-| Second domain | **chatwithstrangers.in** (same app later, own rooms and accent colour) |
+| Brand | **Drift** (changed back on 2026-10-09; the site is global) |
+| Domain | Not chosen yet |
 
-Neither is registered yet; availability was checked against the registries
-on 2026-10-09.
+Earlier the same day the brand was "Free Online Chat India" with
+freeonlinechatindia.com and chatwithstrangers.in. The user then dropped
+"India" because the site is global, and later went back to Drift, the
+concept's original name. By that afternoon chatwithstrangers.in and
+chatwithstrangers.com were registered by someone; onlinechatwithstrangers.com
+and chatwithstrangers.chat were still free. The search research below still
+holds for picking keyword pages and a domain.
 
 ## Why an exact-match domain
 
@@ -51,7 +55,6 @@ indiachat.chat, hopchat.chat.
 
 ## Rejected
 
-- **Drift**: the concept's working name; not searchable.
 - **Adult names** (lewdchat and similar): filtered by SafeSearch and refused
   by most ad networks and payment providers.
 - **"free chat online" domains**: the phrase now means ChatGPT.

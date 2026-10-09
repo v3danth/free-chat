@@ -12,10 +12,9 @@ type Variant string
 const (
 	Full  Variant = "full"  // longest side 1280px
 	Thumb Variant = "thumb" // longest side 320px
-	Blur  Variant = "blur"  // thumb-sized, unrecognisable; shown before a reveal
 )
 
-var Variants = []Variant{Full, Thumb, Blur}
+var Variants = []Variant{Full, Thumb}
 
 // File is the path of a variant relative to the storage root.
 func File(v Variant, key string) string { return path.Join(string(v), key+".jpg") }

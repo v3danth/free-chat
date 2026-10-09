@@ -53,9 +53,11 @@ func (r *MySQLRepository) InsertBatch(ctx context.Context, msgs []Message) error
 
 func (r *MySQLRepository) Recent(ctx context.Context, roomID uint64, limit int) ([]Entry, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT m.id, m.room_id, m.sender_id, m.sender_name, m.body, COALESCE(m.media_id, 0), COALESCE(md.file_key, '')
+		SELECT m.id, m.room_id, m.sender_id, m.sender_name, m.body, COALESCE(m.media_id, 0), COALESCE(md.file_key, ''),
+		       COALESCE(u.gender, '')
 		FROM messages m
 		LEFT JOIN media md ON md.id = m.media_id AND md.removed_at IS NULL
+		LEFT JOIN users u ON u.id = m.sender_id
 		WHERE m.room_id = ? AND m.hidden_at IS NULL
 		ORDER BY m.id DESC
 		LIMIT ?`, roomID, limit)
@@ -67,7 +69,7 @@ func (r *MySQLRepository) Recent(ctx context.Context, roomID uint64, limit int) 
 	var out []Entry
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&e.ID, &e.RoomID, &e.SenderID, &e.SenderName, &e.Body, &e.MediaID, &e.MediaKey); err != nil {
+		if err := rows.Scan(&e.ID, &e.RoomID, &e.SenderID, &e.SenderName, &e.Body, &e.MediaID, &e.MediaKey, &e.SenderGender); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

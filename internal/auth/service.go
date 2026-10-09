@@ -140,6 +140,17 @@ func (s *Service) Register(ctx context.Context, reg Registration) (user.User, er
 	return s.createMember(ctx, profile, reg.Email, reg.Password, user.RoleUser, s.geo.Country(reg.Origin.IP), ipHash)
 }
 
+var errStaffRole = apperr.New(apperr.Invalid, "staff role must be moderator or admin")
+
+// CreateStaff makes a moderator or admin account. Only the admin calls it
+// (the route checks); staff cannot sign themselves up.
+func (s *Service) CreateStaff(ctx context.Context, reg Registration, role user.Role) (user.User, error) {
+	if !role.AtLeast(user.RoleModerator) {
+		return user.User{}, errStaffRole
+	}
+	return s.createMember(ctx, reg.Profile, reg.Email, reg.Password, role, "", nil)
+}
+
 func (s *Service) Login(ctx context.Context, c Credentials) (Session, error) {
 	if _, err := s.admit(ctx, c.Origin); err != nil {
 		return Session{}, err
@@ -204,7 +215,7 @@ func (s *Service) EnsureAdmin(ctx context.Context, email, password, name string)
 		return err
 	}
 	// The bootstrap name may be reserved for everyone else ("admin").
-	profile := user.Profile{Name: name, Gender: user.GenderOther, Age: 18, Intent: user.IntentTalk}
+	profile := user.Profile{Name: name, Gender: user.GenderOther, Age: 18}
 	_, err = s.createMember(ctx, profile, email, password, user.RoleAdmin, "", nil)
 	return err
 }

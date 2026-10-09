@@ -1,5 +1,5 @@
--- Free Online Chat India: schema v2.
--- Fresh install only: `make mysql-reset` drops and recreates the database.
+-- Drift: schema v2.
+-- Fresh install only: `make db-reset` drops and recreates the databases.
 --
 -- Design notes
 --   * Guests are one-visit: names are not unique for guests, only for members.

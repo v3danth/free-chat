@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -26,12 +27,14 @@ type Repository interface {
 	GetByEmail(ctx context.Context, email string) (User, error)
 	// UpdateCard changes the editable card fields; photoID must belong to
 	// the user and not be removed, or ErrPhotoNotYours.
-	UpdateCard(ctx context.Context, id uint64, intent Intent, about, location string, photoID *uint64) error
+	UpdateCard(ctx context.Context, id uint64, tags []string, about, location string, photoID *uint64) error
 	Touch(ctx context.Context, id uint64) error
 	SetRole(ctx context.Context, id uint64, role Role) error
 	// SetBan sets or clears a ban; banning also revokes every token.
 	SetBan(ctx context.Context, id uint64, until *time.Time) error
 	SetMute(ctx context.Context, id uint64, until *time.Time) error
+	// ListStaff returns every moderator and admin, admins first.
+	ListStaff(ctx context.Context) ([]User, error)
 }
 
 type MySQLRepository struct {
@@ -43,7 +46,7 @@ func NewRepository(db *sql.DB) *MySQLRepository {
 }
 
 const selectUser = `
-	SELECT u.id, u.kind, u.role, u.name, u.gender, u.age, u.intent, u.about, u.location,
+	SELECT u.id, u.kind, u.role, u.name, u.gender, u.age, u.tags, u.about, u.location,
 	       u.country_code, u.photo_media_id, m.file_key, u.email, u.password_hash,
 	       u.token_version, u.banned_until, u.muted_until, u.ip_hash, u.last_seen_at, u.created_at
 	FROM users u
@@ -51,12 +54,12 @@ const selectUser = `
 
 func (r *MySQLRepository) Create(ctx context.Context, u User) (User, error) {
 	const query = `
-		INSERT INTO users (kind, role, name, gender, age, intent, about, location,
+		INSERT INTO users (kind, role, name, gender, age, tags, about, location,
 		                   country_code, email, password_hash, ip_hash)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	p := u.Profile
-	res, err := r.db.ExecContext(ctx, query, u.Kind, u.Role, p.Name, p.Gender, p.Age, p.Intent,
+	res, err := r.db.ExecContext(ctx, query, u.Kind, u.Role, p.Name, p.Gender, p.Age, tagsJSON(p.Tags),
 		p.About, p.Location, nullString(u.Country), u.Email, u.PasswordHash, u.IPHash)
 	switch {
 	case database.IsDuplicateKeyOn(err, memberNameIndex):
@@ -82,13 +85,13 @@ func (r *MySQLRepository) GetByEmail(ctx context.Context, email string) (User, e
 	return r.one(ctx, selectUser+`WHERE u.email = ?`, email)
 }
 
-func (r *MySQLRepository) UpdateCard(ctx context.Context, id uint64, intent Intent, about, location string, photoID *uint64) error {
+func (r *MySQLRepository) UpdateCard(ctx context.Context, id uint64, tags []string, about, location string, photoID *uint64) error {
 	const query = `
-		UPDATE users SET intent = ?, about = ?, location = ?, photo_media_id = ?
+		UPDATE users SET tags = ?, about = ?, location = ?, photo_media_id = ?
 		WHERE id = ? AND (? IS NULL OR EXISTS (
 			SELECT 1 FROM media WHERE id = ? AND owner_id = ? AND removed_at IS NULL))`
 
-	res, err := r.db.ExecContext(ctx, query, intent, about, location, photoID, id, photoID, photoID, id)
+	res, err := r.db.ExecContext(ctx, query, tagsJSON(tags), about, location, photoID, id, photoID, photoID, id)
 	if err != nil {
 		return err
 	}
@@ -122,6 +125,23 @@ func (r *MySQLRepository) SetMute(ctx context.Context, id uint64, until *time.Ti
 	return r.exec(ctx, `UPDATE users SET muted_until = ? WHERE id = ?`, until, id)
 }
 
+func (r *MySQLRepository) ListStaff(ctx context.Context) ([]User, error) {
+	rows, err := r.db.QueryContext(ctx, selectUser+`WHERE u.role IN ('admin', 'moderator') ORDER BY u.role = 'admin' DESC, u.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var staff []User
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		staff = append(staff, u)
+	}
+	return staff, rows.Err()
+}
+
 func (r *MySQLRepository) exec(ctx context.Context, query string, args ...any) error {
 	res, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -136,24 +156,42 @@ func (r *MySQLRepository) exec(ctx context.Context, query string, args ...any) e
 }
 
 func (r *MySQLRepository) one(ctx context.Context, query string, args ...any) (User, error) {
+	u, err := scanUser(r.db.QueryRowContext(ctx, query, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, ErrNotFound
+	}
+	return u, err
+}
+
+func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	var (
 		u             User
 		country       sql.NullString
 		banned, muted sql.NullTime
+		tags          []byte
 	)
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(
+	err := row.Scan(
 		&u.ID, &u.Kind, &u.Role, &u.Profile.Name, &u.Profile.Gender, &u.Profile.Age,
-		&u.Profile.Intent, &u.Profile.About, &u.Profile.Location, &country, &u.PhotoID,
+		&tags, &u.Profile.About, &u.Profile.Location, &country, &u.PhotoID,
 		&u.PhotoKey, &u.Email, &u.PasswordHash, &u.TokenVersion, &banned, &muted,
 		&u.IPHash, &u.LastSeenAt, &u.CreatedAt,
 	)
-	if errors.Is(err, sql.ErrNoRows) {
-		return User{}, ErrNotFound
+	if err == nil {
+		err = json.Unmarshal(tags, &u.Profile.Tags)
 	}
 	u.Country = country.String
 	u.BannedUntil = database.TimePtr(banned)
 	u.MutedUntil = database.TimePtr(muted)
 	return u, err
+}
+
+// tagsJSON stores tags as a JSON array; never null, so reads always decode.
+func tagsJSON(tags []string) string {
+	if tags == nil {
+		tags = []string{}
+	}
+	data, _ := json.Marshal(tags) // a []string always marshals
+	return string(data)
 }
 
 func nullString(s string) any {

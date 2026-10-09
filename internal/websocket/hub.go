@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -194,6 +195,51 @@ func (h *Hub) OnlineIDs() []uint64 {
 	return ids
 }
 
+// Snapshot counts who is connected right now, for the control panel.
+type Snapshot struct {
+	Online    int            `json:"online"`
+	Guests    int            `json:"guests"`
+	Members   int            `json:"members"`
+	Staff     int            `json:"staff"`
+	Countries map[string]int `json:"countries"`
+	Tags      map[string]int `json:"tags"` // lowercased, so "Music" and "music" count together
+	Knocks    int            `json:"knocks_waiting"`
+	OpenDoors int            `json:"open_chats"`
+}
+
+func (h *Hub) Snapshot() Snapshot {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	s := Snapshot{Online: len(h.clients), Countries: map[string]int{}, Tags: map[string]int{}}
+	for _, c := range h.clients {
+		u := c.user
+		if u.Kind == user.KindGuest {
+			s.Guests++
+		} else {
+			s.Members++
+		}
+		if u.Role.AtLeast(user.RoleModerator) {
+			s.Staff++
+		}
+		country := u.Country
+		if country == "" {
+			country = "unknown"
+		}
+		s.Countries[country]++
+		for _, tag := range u.Profile.Tags {
+			s.Tags[strings.ToLower(tag)]++
+		}
+	}
+	for _, d := range h.doors {
+		if d.open {
+			s.OpenDoors++
+		} else {
+			s.Knocks++
+		}
+	}
+	return s
+}
+
 // Close disconnects everyone; used on server shutdown.
 func (h *Hub) Close() {
 	h.mu.Lock()
@@ -276,7 +322,7 @@ func (h *Hub) sendRoom(c *Client, cmd roomSendCmd) error {
 		return err
 	}
 	m := message.NewRoom(h.IDs.Next(), cmd.room, c.id(), out.name, out.body, out.att.ID)
-	ev := roomEvent(m, out.att, out.filtered)
+	ev := roomEvent(m, out.gender, out.att, out.filtered)
 	frame := encode(ev)
 
 	h.mu.Lock()
@@ -370,6 +416,7 @@ func (h *Hub) knockLocked(from, to uint64, hasImage, commit bool) (knock, opened
 
 type prepared struct {
 	name     string
+	gender   string
 	body     string
 	filtered bool
 	att      media.Attachment
@@ -379,7 +426,7 @@ type prepared struct {
 // rate limit, word filter, and image ownership.
 func (h *Hub) prepare(c *Client, content string, mediaID uint64) (prepared, error) {
 	h.mu.RLock()
-	name, muted := c.user.Profile.Name, c.user.MutedUntil
+	name, gender, muted := c.user.Profile.Name, string(c.user.Profile.Gender), c.user.MutedUntil
 	h.mu.RUnlock()
 
 	if muted != nil && time.Now().Before(*muted) {
@@ -392,7 +439,7 @@ func (h *Hub) prepare(c *Client, content string, mediaID uint64) (prepared, erro
 	if res.Blocked {
 		return prepared{}, errBlockedWords
 	}
-	out := prepared{name: name, body: res.Content, filtered: res.Filtered}
+	out := prepared{name: name, gender: gender, body: res.Content, filtered: res.Filtered}
 	if mediaID != 0 {
 		err := h.withDB(func(ctx context.Context) (err error) {
 			out.att, err = h.Media.Attach(ctx, mediaID, c.id())

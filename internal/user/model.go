@@ -60,23 +60,13 @@ const (
 	GenderCouple    Gender = "couple"
 )
 
-type Intent string
-
-const (
-	IntentTalk          Intent = "talk"
-	IntentFlirt         Intent = "flirt"
-	IntentNightOwl      Intent = "night_owl"
-	IntentVent          Intent = "vent"
-	IntentSomethingReal Intent = "something_real"
-)
-
 // Profile is the public card. A Profile value only exists once ParseProfile
 // has accepted it.
 type Profile struct {
 	Name     string
 	Gender   Gender
 	Age      uint8
-	Intent   Intent
+	Tags     []string // what they are here for, in their own words
 	About    string
 	Location string
 }
@@ -110,6 +100,8 @@ const (
 	maxName     = 32
 	maxAbout    = 140
 	maxLocation = 40
+	maxTags     = 3
+	maxTag      = 20
 )
 
 // Names allow any script's letters and combining marks (Devanagari matras
@@ -127,7 +119,7 @@ var (
 	errReserved = apperr.New(apperr.Invalid, "that name is reserved")
 	errGender   = apperr.New(apperr.Invalid, "gender must be one of male, female, non-binary, femboy, other, couple")
 	errAge      = apperr.New(apperr.Invalid, "you must be 18 or older")
-	errIntent   = apperr.New(apperr.Invalid, "intent must be one of talk, flirt, night_owl, vent, something_real")
+	errTags     = apperr.New(apperr.Invalid, "add up to 3 tags of 1-20 letters or numbers each")
 	errAbout    = apperr.New(apperr.Invalid, "about must be at most 140 characters")
 	errLocation = apperr.New(apperr.Invalid, "location must be at most 40 letters")
 )
@@ -160,15 +152,25 @@ func ParseGender(s string) (Gender, error) {
 	return "", errGender
 }
 
-// ParseIntent defaults to "talk" when empty.
-func ParseIntent(s string) (Intent, error) {
-	switch i := Intent(s); i {
-	case "":
-		return IntentTalk, nil
-	case IntentTalk, IntentFlirt, IntentNightOwl, IntentVent, IntentSomethingReal:
-		return i, nil
+var tagPattern = regexp.MustCompile(`^[\p{L}\p{M}\p{N}_ -]+$`)
+
+// ParseTags cleans free-form "here to" tags: spaces collapsed, empty ones
+// dropped, duplicates (ignoring case) removed, at most maxTags kept.
+func ParseTags(raw []string) ([]string, error) {
+	tags := []string{}
+	seen := map[string]bool{}
+	for _, r := range raw {
+		tag := strings.Join(strings.Fields(r), " ")
+		if tag == "" || seen[strings.ToLower(tag)] {
+			continue
+		}
+		if utf8.RuneCountInString(tag) > maxTag || !tagPattern.MatchString(tag) || len(tags) == maxTags {
+			return nil, errTags
+		}
+		seen[strings.ToLower(tag)] = true
+		tags = append(tags, tag)
 	}
-	return "", errIntent
+	return tags, nil
 }
 
 func ParseAbout(s string) (string, error) {
@@ -194,14 +196,20 @@ type Screen func(string) (cleaned string, masked, blocked bool)
 var (
 	errNameWords = apperr.New(apperr.Invalid, "that name is not allowed")
 	errTextWords = apperr.New(apperr.Invalid, "your profile contains words that are not allowed")
+	errTagWords  = apperr.New(apperr.Invalid, "a tag contains words that are not allowed")
 )
 
 // Screened applies the word filter to everything others will read. A name
-// is rejected outright if it trips the filter; about and location keep the
-// masked text unless a word is blocked.
+// or tag is rejected outright if it trips the filter; about and location
+// keep the masked text unless a word is blocked.
 func (p Profile) Screened(screen Screen) (Profile, error) {
 	if _, masked, blocked := screen(p.Name); masked || blocked {
 		return Profile{}, errNameWords
+	}
+	for _, tag := range p.Tags {
+		if _, masked, blocked := screen(tag); masked || blocked {
+			return Profile{}, errTagWords
+		}
 	}
 	about, _, aboutBlocked := screen(p.About)
 	location, _, locBlocked := screen(p.Location)
@@ -214,12 +222,12 @@ func (p Profile) Screened(screen Screen) (Profile, error) {
 
 // ProfileInput is the untrusted shape every boundary decodes into.
 type ProfileInput struct {
-	Name     string `json:"name"`
-	Gender   string `json:"gender"`
-	Age      int    `json:"age"`
-	Intent   string `json:"intent"`
-	About    string `json:"about"`
-	Location string `json:"location"`
+	Name     string   `json:"name"`
+	Gender   string   `json:"gender"`
+	Age      int      `json:"age"`
+	Tags     []string `json:"tags"`
+	About    string   `json:"about"`
+	Location string   `json:"location"`
 }
 
 func (in ProfileInput) Parse() (Profile, error) {
@@ -234,7 +242,7 @@ func (in ProfileInput) Parse() (Profile, error) {
 	if in.Age < minAge || in.Age > maxAge {
 		return Profile{}, errAge
 	}
-	intent, err := ParseIntent(in.Intent)
+	tags, err := ParseTags(in.Tags)
 	if err != nil {
 		return Profile{}, err
 	}
@@ -246,5 +254,5 @@ func (in ProfileInput) Parse() (Profile, error) {
 	if err != nil {
 		return Profile{}, err
 	}
-	return Profile{Name: name, Gender: gender, Age: uint8(in.Age), Intent: intent, About: about, Location: location}, nil
+	return Profile{Name: name, Gender: gender, Age: uint8(in.Age), Tags: tags, About: about, Location: location}, nil
 }

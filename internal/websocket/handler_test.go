@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/v3danth/free-chat/internal/user"
@@ -10,12 +11,15 @@ import (
 func TestCardUpdateApply(t *testing.T) {
 	photo, key := uint64(5), "key"
 	current := user.User{
-		Profile:  user.Profile{Intent: user.IntentNightOwl, About: "cannot sleep", Location: "Pune"},
+		Kind:     user.KindMember,
+		Profile:  user.Profile{Tags: []string{"night owl"}, About: "cannot sleep", Location: "Pune"},
 		PhotoID:  &photo,
 		PhotoKey: &key,
 	}
 	removed := current
 	removed.PhotoKey = nil
+	guest := current
+	guest.Kind = user.KindGuest
 
 	tests := []struct {
 		name      string
@@ -26,15 +30,17 @@ func TestCardUpdateApply(t *testing.T) {
 		wantErr   bool
 	}{
 		{"photo only keeps the card", `{"photo_id": 9}`, current,
-			user.Profile{Intent: user.IntentNightOwl, About: "cannot sleep", Location: "Pune"}, ptr(9), false},
-		{"intent only keeps the photo", `{"intent": "flirt"}`, current,
-			user.Profile{Intent: user.IntentFlirt, About: "cannot sleep", Location: "Pune"}, ptr(5), false},
+			user.Profile{Tags: []string{"night owl"}, About: "cannot sleep", Location: "Pune"}, ptr(9), false},
+		{"tags only keeps the photo", `{"tags": ["flirt", "music"]}`, current,
+			user.Profile{Tags: []string{"flirt", "music"}, About: "cannot sleep", Location: "Pune"}, ptr(5), false},
 		{"null clears the photo", `{"photo_id": null}`, current, current.Profile, nil, false},
 		{"empty strings clear text", `{"about": "", "location": ""}`, current,
-			user.Profile{Intent: user.IntentNightOwl}, ptr(5), false},
+			user.Profile{Tags: []string{"night owl"}}, ptr(5), false},
 		{"a removed photo is dropped", `{}`, removed, current.Profile, nil, false},
 		{"bad photo id", `{"photo_id": "x"}`, current, user.Profile{}, nil, true},
-		{"bad intent", `{"intent": "party"}`, current, user.Profile{}, nil, true},
+		{"bad tags", `{"tags": ["a", "b", "c", "d"]}`, current, user.Profile{}, nil, true},
+		{"guests cannot set a photo", `{"photo_id": 9}`, guest, user.Profile{}, nil, true},
+		{"guests can clear one", `{"photo_id": null}`, guest, guest.Profile, nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -49,7 +55,7 @@ func TestCardUpdateApply(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			if p != tt.wantP {
+			if !reflect.DeepEqual(p, tt.wantP) {
 				t.Errorf("profile = %+v, want %+v", p, tt.wantP)
 			}
 			if (photo == nil) != (tt.wantPhoto == nil) || (photo != nil && *photo != *tt.wantPhoto) {

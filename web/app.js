@@ -1,4 +1,4 @@
-// Free Online Chat India: browser client. Plain ES modules, no build step.
+// Drift: browser client. Plain ES modules, no build step.
 // The contract with the server is SPEC.md. Text from the network is only
 // ever rendered with textContent, never as HTML.
 
@@ -9,25 +9,23 @@
 const WORDS = {
     tagline: 'Talk to strangers. No sign-up, no app.',
     heroA: 'Walk in.', heroB: 'Say hi.', heroC: 'Leave no trace.',
-    heroP: 'Make a card, step into the room and talk to whoever is up right now. Your photo stays blurred until someone you knocked on answers.',
+    heroP: 'Make a card, step into the room and talk to whoever is up right now. Everyone wears their face; a member\'s real photo shows only after they answer your knock.',
     point1: 'No email, no phone number, no download',
-    point2: 'Photos stay blurred until they reply',
+    point2: 'Real photos only after they reply',
     point3: 'Your card and chats disappear when you leave',
     hereNow: 'here now',
     makeCard: 'Make your card',
     name: 'Name', namePh: 'What should people call you?',
-    age: 'Age', gender: 'I am', intent: 'Here to',
+    age: 'Age', gender: 'I am', tags: 'Here to',
     location: 'Location', locationPh: 'City, optional',
     about: 'About', aboutPh: 'One line about you (optional)',
-    photo: 'Add a photo', photoHint: 'Optional. Others see it blurred until you open a chat with them.',
+    photo: 'Add a photo', photoHint: 'Optional. Shown only to people whose knock you answer, or who answer yours.',
     enter: 'Enter the room',
     fine: 'You must be 18 or older. Be kind; reports are read by real people.',
-    staff: 'Member or staff sign in',
     email: 'Email', password: 'Password', signIn: 'Sign in', back: 'Back',
     room: 'The Room', lastLines: 'Only the last 20 lines are kept',
     sayRoom: 'Say something to the room...', send: 'Send', sendPhoto: 'Send a photo',
     people: 'Here now', chats: 'Chats',
-    everyone: 'Everyone', women: 'Women', men: 'Men', young: '18-25',
     knock: 'Knock', open: 'Open chat', leave: 'Leave', you: 'you',
     nobody: 'Nobody matches right now. People drift in all night, check back in a minute.',
     noChats: 'No chats yet. Knock on someone in Here now to start one.',
@@ -50,7 +48,7 @@ const WORDS = {
     editCard: 'Edit your card', save: 'Save', saved: 'Saved',
     changePhoto: 'Change photo', removePhoto: 'Remove photo',
     filtered: 'filtered',
-    desk: 'Mod desk', reports: 'Reports', words: 'Banned words', audit: 'Audit log',
+    desk: 'Control panel', reports: 'Reports', words: 'Banned words', audit: 'Audit log',
     backToChat: 'Back to chat',
     wordHelp: 'Changes reach every live chat within a second. Mask hides the word, Block stops the whole message.',
     wordPh: 'Word or phrase', add: 'Add', mask: 'Mask', blockWord: 'Block',
@@ -58,17 +56,18 @@ const WORDS = {
     dismiss: 'Dismiss', kick: 'Kick', mute30: 'Mute 30 min', ban24: 'Ban 24h', banIP: 'Ban 24h + device',
     reconnecting: 'Reconnecting...',
     ended: 'You left the room.',
-    seoTitle: 'Free online chat in India',
-    seoP: 'Free Online Chat India is a chat room for meeting strangers: random chat without registration, on your phone or laptop. Looking for an Omegle alternative or a Y99 alternative? Walk in, make a card and say hi.',
+    seoTitle: 'Free chat with strangers',
+    seoP: 'Drift is a free chat room for meeting strangers: random chat without registration, on your phone or laptop. Looking for an Omegle alternative or a Y99 alternative? Walk in, make a card and say hi.',
 };
 
 const GENDERS = { female: 'Woman', male: 'Man', 'non-binary': 'Non-binary', femboy: 'Femboy', couple: 'Couple', other: 'Other' };
-const INTENTS = { talk: 'Just talk', flirt: 'Flirt', night_owl: 'Night owls', vent: 'Vent', something_real: 'Something real' };
 const REASONS = { spam: 'Spam', harassment: 'Harassment', nudity: 'Nudity', violence: 'Violence', hate: 'Hate', underage: 'Under 18', scam: 'Scam', other: 'Other' };
 
 const t = (key, vars = {}) => (WORDS[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
 const genderLabel = (g) => GENDERS[g] ?? g;
-const intentLabel = (i) => INTENTS[i] ?? i;
+// Suggestions only: people can type any tag (up to 3, 20 characters each).
+const TAG_IDEAS = ['just talk', 'night owl', 'flirt', 'vent', 'music', 'gaming', 'study break', 'something real'];
+const MAX_TAGS = 3;
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -130,10 +129,10 @@ function faceURL(person) {
   return `/avatar/v1/${encodeURIComponent(key || 'stranger')}`;
 }
 
-// pictureStyle shows the best image the viewer may see: the sharp photo
-// after a door opens, the blurred one before, otherwise the pixel face.
+// pictureStyle shows the best image the viewer may see: a member's photo
+// once a door has opened (or their own), otherwise the pixel face.
 function pictureStyle(person) {
-  const photo = person.photo_url || person.photo_blur_url;
+  const photo = person.photo_url;
   return { backgroundImage: `url("${photo || faceURL(person)}")`, imageRendering: photo ? '' : 'pixelated' };
 }
 
@@ -150,7 +149,7 @@ function flag(cc) {
   if (!/^[A-Z]{2}$/.test(cc || '')) return null;
   return h('img', {
     class: 'flag', alt: cc, title: cc, loading: 'lazy', width: 18, height: 13,
-    src: `https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/flags/4x3/${cc.toLowerCase()}.svg`,
+    src: `/flags/${cc.toLowerCase()}.svg`, // bundled from flag-icons (MIT), see web/flags/LICENSE
   });
 }
 
@@ -215,7 +214,6 @@ const state = {
   active: null,      // peer id of the open chat
   view: 'room',      // mobile: room | people | chats
   side: 'people',    // desktop right pane: people | chats
-  filter: 'all',
   ws: null,
   retry: 0,
   ended: false,
@@ -238,6 +236,38 @@ const isStaff = () => state.me && (state.me.role === 'moderator' || state.me.rol
 // Screen: Enter
 // ---------------------------------------------------------------------------
 
+// tagEditor edits a list of free-form tags in place. value() also counts
+// text typed but not yet added, so pressing submit never loses a tag.
+function tagEditor(tags) {
+  const list = h('div', { class: 'tag-list' });
+  const input = h('input', { class: 'input tag-input', maxlength: 20, placeholder: 'Type a tag and press Enter', 'aria-label': 'Add a tag' });
+  const ideas = h('div', { class: 'tag-ideas' });
+  const add = (raw) => {
+    const tag = raw.trim().replace(/\s+/g, ' ');
+    if (!tag || tags.length >= MAX_TAGS || tags.some((x) => x.toLowerCase() === tag.toLowerCase())) return;
+    tags.push(tag);
+    draw();
+  };
+  const draw = () => {
+    list.replaceChildren(...tags.map((tag, i) => h('span', { class: 'tag-chip' }, tag,
+      h('button', { type: 'button', 'aria-label': `Remove ${tag}`, onclick: () => { tags.splice(i, 1); draw(); } }, icon('x', 12)))));
+    const full = tags.length >= MAX_TAGS;
+    input.disabled = full;
+    input.placeholder = full ? 'Three tags is the limit' : 'Type a tag and press Enter';
+    ideas.replaceChildren(...TAG_IDEAS.filter((idea) => !tags.some((x) => x.toLowerCase() === idea)).map((idea) =>
+      h('button', { type: 'button', class: 'chip sm', disabled: full, onclick: () => add(idea) }, `+ ${idea}`)));
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(input.value); input.value = ''; }
+    if (e.key === 'Backspace' && !input.value && tags.length) { tags.pop(); draw(); }
+  });
+  draw();
+  return {
+    el: h('div', { class: 'tag-editor' }, list, input, ideas),
+    value: () => { add(input.value); input.value = ''; return [...tags]; },
+  };
+}
+
 function chipGroup(name, options, selected, onPick) {
   const group = h('div', { class: 'chips', role: 'group', 'aria-label': name });
   for (const [value, label] of Object.entries(options)) {
@@ -254,52 +284,87 @@ function chipGroup(name, options, selected, onPick) {
   return group;
 }
 
+// enterDraft keeps what was typed while switching between the three ways in.
+const enterDraft = {
+  mode: 'guest', // guest | join | signin
+  name: new URLSearchParams(window.location.search).get('name') || '',
+  age: '', gender: '', tags: [], location: '', about: '', email: '', photo: null,
+};
+
 function renderEnter(message) {
   state.screen = 'enter';
-  const draft = { gender: '', intent: 'talk', photo: null };
+  const d = enterDraft;
   const err = h('div', { class: 'error-text', role: 'alert' }, message || '');
-  const photoPreview = h('span', { class: 'avatar', style: { width: '56px', height: '56px', ...pictureStyle({ name: new URLSearchParams(window.location.search).get('name') || '' }) } });
-  const photoInput = h('input', {
-    type: 'file', accept: 'image/jpeg,image/png,image/gif,image/webp', class: 'sr', id: 'photo-in',
-    onchange: (e) => {
-      draft.photo = e.target.files[0] || null;
-      if (draft.photo) {
-        Object.assign(photoPreview.style, { backgroundImage: `url("${URL.createObjectURL(draft.photo)}")`, imageRendering: '', filter: 'blur(3px)' });
-      }
-    },
-  });
+  const bind = (key, attrs) => h('input', { class: 'input', value: d[key], ...attrs, oninput: (e) => { d[key] = e.target.value; attrs.oninput?.(e); } });
 
-  const name = h('input', {
-    class: 'input', name: 'name', maxlength: 32, required: true, placeholder: t('namePh'), autocomplete: 'off',
-    value: new URLSearchParams(window.location.search).get('name') || '',
-    oninput: () => { if (!draft.photo) Object.assign(photoPreview.style, pictureStyle({ name: name.value })); },
+  // The face (or, when joining with one, the photo) previews live.
+  const preview = h('span', { class: 'avatar', style: { width: '56px', height: '56px' } });
+  const showPreview = () => Object.assign(preview.style, d.photo
+    ? { backgroundImage: `url("${URL.createObjectURL(d.photo)}")`, imageRendering: '' }
+    : pictureStyle({ name: d.name }));
+  showPreview();
+
+  const submit = h('button', { class: 'btn primary', type: 'submit', style: { height: '52px', fontSize: '16px' } },
+    { guest: t('enter'), join: 'Create account', signin: t('signIn') }[d.mode]);
+
+  const tagBox = tagEditor(d.tags);
+  const profileFields = () => [
+    h('div', { class: 'photo-pick' },
+      d.mode === 'join'
+        ? h('label', { for: 'photo-in', style: { cursor: 'pointer' } }, preview)
+        : preview,
+      h('div', {},
+        d.mode === 'join'
+          ? [h('label', { for: 'photo-in', style: { cursor: 'pointer', fontWeight: 600 } }, t('photo')), h('br'), h('small', {}, t('photoHint'))]
+          : [h('b', {}, 'Your face'), h('br'), h('small', {}, 'Drawn from your name. Change the name, change the face.')]),
+      d.mode === 'join' && h('input', {
+        type: 'file', accept: 'image/jpeg,image/png,image/gif,image/webp', class: 'sr', id: 'photo-in',
+        onchange: (e) => { d.photo = e.target.files[0] || null; showPreview(); },
+      })),
+    h('div', { class: 'row' },
+      h('label', { class: 'field' }, h('span', {}, t('name')), bind('name', { name: 'name', maxlength: 32, required: true, placeholder: t('namePh'), autocomplete: 'off', oninput: () => { if (!d.photo) showPreview(); } })),
+      h('label', { class: 'field' }, h('span', {}, t('age')), bind('age', { name: 'age', type: 'number', min: 18, max: 99, required: true, inputmode: 'numeric', placeholder: '18+' }))),
+    h('div', { class: 'field' }, h('span', {}, t('gender')), chipGroup(t('gender'), GENDERS, d.gender, (v) => { d.gender = v; })),
+    h('div', { class: 'field' }, h('span', {}, t('tags')), tagBox.el),
+    h('label', { class: 'field' }, h('span', {}, t('location')), bind('location', { name: 'location', maxlength: 40, placeholder: t('locationPh') })),
+    h('label', { class: 'field' }, h('span', {}, t('about')), bind('about', { name: 'about', maxlength: 140, placeholder: t('aboutPh') })),
+  ];
+  const credentialFields = (newAccount) => [
+    h('label', { class: 'field' }, h('span', {}, t('email')), bind('email', { name: 'email', type: 'email', autocomplete: newAccount ? 'email' : 'username', required: true })),
+    h('label', { class: 'field' }, h('span', {}, t('password')),
+      h('input', { class: 'input', name: 'password', type: 'password', required: true, minlength: newAccount ? 8 : null, autocomplete: newAccount ? 'new-password' : 'current-password' })),
+  ];
+  const profileBody = () => ({
+    name: d.name.trim(), gender: d.gender, age: Number(d.age), tags: tagBox.value(),
+    about: d.about.trim(), location: d.location.trim(),
   });
-  const age = h('input', { class: 'input', name: 'age', type: 'number', min: 18, max: 99, required: true, inputmode: 'numeric', placeholder: '18+' });
-  const location = h('input', { class: 'input', name: 'location', maxlength: 40, placeholder: t('locationPh') });
-  const about = h('input', { class: 'input', name: 'about', maxlength: 140, placeholder: t('aboutPh') });
-  const submit = h('button', { class: 'btn primary', type: 'submit', style: { height: '52px', fontSize: '16px' } }, t('enter'));
 
   const form = h('form', {
     class: 'make-card', novalidate: true,
     onsubmit: async (e) => {
       e.preventDefault();
       err.textContent = '';
-      if (!draft.gender) { err.textContent = 'Pick who you are.'; return; }
+      const password = form.querySelector('input[name=password]')?.value || '';
+      if (d.mode !== 'signin' && !d.gender) { err.textContent = 'Pick who you are.'; return; }
       submit.disabled = true;
       try {
-        const res = await api('POST', '/auth/guest', {
-          name: name.value.trim(), gender: draft.gender, age: Number(age.value), intent: draft.intent,
-          about: about.value.trim(), location: location.value.trim(),
-        });
-        setSession(res.token, res.user);
-        if (draft.photo) {
-          try {
-            const up = await uploadPhoto(draft.photo);
-            state.me = await api('PATCH', '/me', { photo_id: up.id });
-          } catch (upErr) {
-            toast(upErr.message, true);
+        if (d.mode === 'guest') {
+          const res = await api('POST', '/auth/guest', profileBody());
+          setSession(res.token, res.user);
+        } else {
+          if (d.mode === 'join') await api('POST', '/auth/register', { ...profileBody(), email: d.email.trim(), password });
+          const res = await api('POST', '/auth/login', { email: d.email.trim(), password });
+          setSession(res.token, res.user);
+          if (d.mode === 'join' && d.photo) {
+            try {
+              const up = await uploadPhoto(d.photo);
+              state.me = await api('PATCH', '/me', { photo_id: up.id });
+            } catch (upErr) {
+              toast(upErr.message, true);
+            }
           }
         }
+        d.photo = null;
         startRoom();
       } catch (ex) {
         err.textContent = ex.message;
@@ -307,33 +372,23 @@ function renderEnter(message) {
       }
     },
   },
-    h('h2', {}, t('makeCard')),
-    h('div', { class: 'photo-pick' },
-      h('label', { for: 'photo-in', style: { cursor: 'pointer' } }, photoPreview),
-      h('div', {}, h('label', { for: 'photo-in', style: { cursor: 'pointer', fontWeight: 600 } }, t('photo')), h('br'), h('small', {}, t('photoHint'))),
-      photoInput),
-    h('div', { class: 'row' },
-      h('label', { class: 'field' }, h('span', {}, t('name')), name),
-      h('label', { class: 'field' }, h('span', {}, t('age')), age)),
-    h('div', { class: 'field' }, h('span', {}, t('gender')), chipGroup(t('gender'), GENDERS, draft.gender, (v) => { draft.gender = v; })),
-    h('div', { class: 'field' }, h('span', {}, t('intent')), chipGroup(t('intent'), INTENTS, draft.intent, (v) => { draft.intent = v; })),
-    h('label', { class: 'field' }, h('span', {}, t('location')), location),
-    h('label', { class: 'field' }, h('span', {}, t('about')), about),
+    h('div', { class: 'enter-tabs', role: 'tablist' }, [['guest', 'Guest'], ['join', 'Create account'], ['signin', 'Sign in']].map(([mode, label]) =>
+      h('button', { type: 'button', role: 'tab', class: 'tab', 'aria-selected': String(d.mode === mode), onclick: () => { d.mode = mode; renderEnter(); } }, label))),
+    h('h2', {}, { guest: t('makeCard'), join: 'Make your account', signin: 'Welcome back' }[d.mode]),
+    d.mode === 'guest' && h('p', { class: 'fine' }, 'One visit, no email. Your card disappears when you leave.'),
+    d.mode === 'join' && h('p', { class: 'fine' }, 'Keep your name, add your own photo. People see your face until they answer your knock.'),
+    d.mode !== 'signin' && profileFields(),
+    d.mode !== 'guest' && credentialFields(d.mode === 'join'),
     err,
     submit,
-    h('p', { class: 'fine' }, t('fine')),
-    h('button', {
-      type: 'button', class: 'staff-link',
-      onclick: () => { const staff = staffForm(form); form.replaceWith(staff); staff.querySelector('input').focus(); },
-    }, t('staff')),
+    h('p', { class: 'fine' }, d.mode === 'signin' ? 'Staff accounts are created by the admin.' : t('fine')),
   );
 
   const point = (text) => h('li', {}, icon('check', 18), text);
-  const app = $('#app');
-  app.replaceChildren(
+  $('#app').replaceChildren(
     h('div', { class: 'enter' },
       h('header', { class: 'topbar' },
-        h('span', { class: 'brand' }, 'FreeOnlineChat', h('b', {}, 'India')),
+        h('span', { class: 'brand' }, 'Drift', h('b', {}, '.')),
         h('div', { class: 'right' }, h('a', { class: 'btn sm', href: '/faces' }, 'Find your face'))),
       h('main', { class: 'enter-main' },
         h('section', { class: 'hero' },
@@ -346,35 +401,7 @@ function renderEnter(message) {
         h('p', {}, t('seoP')),
         h('p', { class: 'fine' }, h('a', { href: 'https://db-ip.com', rel: 'noopener' }, 'IP Geolocation by DB-IP')))),
   );
-  name.focus();
-}
-
-function staffForm(guestForm) {
-  const err = h('div', { class: 'error-text', role: 'alert' });
-  const email = h('input', { class: 'input', type: 'email', autocomplete: 'username', required: true });
-  const password = h('input', { class: 'input', type: 'password', autocomplete: 'current-password', required: true });
-  const form = h('form', {
-    class: 'make-card',
-    onsubmit: async (e) => {
-      e.preventDefault();
-      err.textContent = '';
-      try {
-        const res = await api('POST', '/auth/login', { email: email.value.trim(), password: password.value });
-        setSession(res.token, res.user);
-        startRoom();
-      } catch (ex) {
-        err.textContent = ex.message;
-      }
-    },
-  },
-    h('h2', {}, t('staff')),
-    h('label', { class: 'field' }, h('span', {}, t('email')), email),
-    h('label', { class: 'field' }, h('span', {}, t('password')), password),
-    err,
-    h('button', { class: 'btn primary', type: 'submit' }, t('signIn')),
-    h('button', { class: 'staff-link', type: 'button', onclick: () => form.replaceWith(guestForm) }, t('back')),
-  );
-  return form;
+  form.querySelector('input')?.focus();
 }
 
 function setSession(token, me) {
@@ -410,13 +437,13 @@ function startRoom() {
 
 function topbar(extra) {
   return h('header', { class: 'topbar' },
-    h('span', { class: 'brand' }, 'FreeOnlineChat', h('b', {}, 'India')),
+    h('span', { class: 'brand' }, 'Drift', h('b', {}, '.')),
     h('div', { class: 'right' },
       h('span', { class: 'live-dot hide-sm', id: 'here-count' }, `${state.online.size + 1} ${t('hereNow')}`),
       extra,
       state.me && h('button', { class: 'me-pill', type: 'button', onclick: openEditCard, title: t('editCard') },
         avatar(state.me, 28),
-        h('span', { class: 'label' }, state.me.name, ' · ', intentLabel(state.me.intent))),
+        h('span', { class: 'label' }, state.me.name, state.me.tags?.length ? ` · ${state.me.tags[0]}` : '')),
       h('button', { class: 'btn sm', type: 'button', onclick: () => endSession(t('ended')) }, t('leave'))));
 }
 
@@ -505,7 +532,8 @@ function feedLine(ev) {
     avatar(person, 32),
     h('div', { class: 'body' },
       h('span', { class: 'meta' },
-        h('button', { type: 'button', onclick: () => !mine && openPerson(ev.sender_id, ev.name) }, ev.name),
+        h('button', { type: 'button', class: 'who-name', 'data-gender': ev.gender || person.gender, onclick: () => !mine && openPerson(ev.sender_id, ev.name) }, ev.name),
+        mine ? h('span', { class: 'you-tag' }, ` (${t('you')})`) : null,
         person.age ? ` · ${genderLabel(person.gender)}, ${person.age}` : '',
         ` · ${clock(ev.ts)}`,
         ev.filtered ? h('span', { class: 'filtered-tag' }, ` · ${t('filtered')}`) : null),
@@ -547,35 +575,19 @@ function renderSide() {
   side.replaceChildren(tabs, state.side === 'chats' ? chatsPane() : peoplePane());
 }
 
-const FILTERS = {
-  all: () => true,
-  women: (c) => c.gender === 'female',
-  men: (c) => c.gender === 'male',
-  young: (c) => c.age <= 25,
-};
-
 function peoplePane() {
   const wrap = h('div', { class: 'people' });
-  const filterBtn = (key, label) => h('button', {
-    type: 'button', class: 'chip', 'aria-pressed': String(state.filter === key),
-    onclick: () => { state.filter = key; renderSide(); },
-  }, label);
-  wrap.append(h('div', { class: 'filters' }, filterBtn('all', t('everyone')), filterBtn('women', t('women')), filterBtn('men', t('men')), filterBtn('young', t('young'))));
-
-  const people = [...state.online.values()].filter(FILTERS[state.filter]);
+  const people = [...state.online.values()].sort((a, b) => (a.online_since || 0) - (b.online_since || 0));
   if (!people.length) {
     wrap.append(h('div', { class: 'empty' }, t('nobody')));
     return wrap;
   }
-  for (const intent of Object.keys(INTENTS)) {
-    const group = people.filter((c) => c.intent === intent).sort((a, b) => (a.online_since || 0) - (b.online_since || 0));
-    if (!group.length) continue;
-    wrap.append(h('div', {},
-      h('div', { class: 'row-title' }, intentLabel(intent), h('span', {}, ` · ${group.length}`)),
-      h('div', { class: 'strip' }, group.map(personCard))));
-  }
+  wrap.append(h('div', { class: 'strip' }, people.map(personCard)));
   return wrap;
 }
+
+// tagRow always renders, empty or not, so cards in a row line up.
+const tagRow = (tags) => h('span', { class: 'tag-row' }, (tags || []).map((tag) => h('span', { class: 'tag-chip small' }, tag)));
 
 function personCard(card) {
   const c = state.convos.get(card.id);
@@ -584,10 +596,12 @@ function personCard(card) {
       type: 'button', class: 'photo', 'aria-label': card.name, onclick: () => openPerson(card.id),
       style: { ...pictureStyle({ ...card, photo_url: c?.peer.photo_url }), border: 'none', width: '100%', cursor: 'pointer' },
     },
-      h('span', { class: 'pill' }, hereFor(card.online_since))),
+      h('span', { class: 'pill' }, hereFor(card.online_since)),
+      card.has_photo && !c?.peer.photo_url ? h('span', { class: 'pill', title: 'Has a photo you will see after they reply' }, icon('photo', 14)) : null),
     h('div', { class: 'info' },
-      h('span', { class: 'name' }, h('span', {}, `${card.name}, ${card.age}`), flag(card.country)),
+      h('span', { class: 'name' }, h('span', {}, h('span', { class: 'who-name', 'data-gender': card.gender }, card.name), `, ${card.age}`), flag(card.country)),
       h('span', { class: 'sub' }, card.about || [genderLabel(card.gender), card.location].filter(Boolean).join(' · ')),
+      tagRow(card.tags),
       h('button', { class: 'btn outline sm', type: 'button', onclick: () => openChat(card.id) }, c ? t('open') : t('knock'))));
 }
 
@@ -616,7 +630,7 @@ function chatsPane() {
     return h('button', {
       class: 'convo-item', type: 'button', 'aria-current': String(state.active === id),
       onclick: () => openChat(id),
-    }, avatar(c.peer, 40), h('span', { class: 't' }, h('b', {}, c.peer.name), h('small', {}, preview)), c.unread ? h('span', { class: 'dot' }) : null);
+    }, avatar(c.peer, 40), h('span', { class: 't' }, h('b', { class: 'who-name', 'data-gender': c.peer.gender }, c.peer.name), h('small', {}, preview)), c.unread ? h('span', { class: 'dot' }) : null);
   }));
 
   const open = state.active != null && state.convos.has(state.active);
@@ -634,7 +648,7 @@ function convoView(peerId) {
   const head = h('div', { class: 'convo-head' },
     h('button', { class: 'icon-btn bare', type: 'button', 'aria-label': t('back'), onclick: () => { state.active = null; renderSide(); } }, icon('back')),
     avatar(peer, 44),
-    h('div', { class: 'who' }, h('b', {}, peer.name, ' ', flag(peer.country)), h('small', {}, meta)),
+    h('div', { class: 'who' }, h('b', {}, h('span', { class: 'who-name', 'data-gender': peer.gender }, peer.name), ' ', flag(peer.country)), h('small', {}, meta)),
     h('button', { class: 'btn sm ghost', type: 'button', onclick: () => openReport('user', peerId) }, t('report')),
     h('button', { class: 'btn sm', type: 'button', onclick: () => blockPerson(peerId) }, t('block')));
 
@@ -754,7 +768,7 @@ function openPerson(id, fallbackName) {
   const card = state.online.get(id);
   if (!card) { toast(`${fallbackName || 'They'} left.`); return; }
   const c = state.convos.get(id);
-  const facts = [genderLabel(card.gender), card.age, intentLabel(card.intent), card.location, hereFor(card.online_since)].filter(Boolean);
+  const facts = [genderLabel(card.gender), card.age, ...(card.tags || []), card.location, hereFor(card.online_since)].filter(Boolean);
 
   let d;
   const modBox = isStaff() && card.role === 'user' && h('div', { class: 'mod-box' },
@@ -767,7 +781,7 @@ function openPerson(id, fallbackName) {
 
   d = dialog(h('div', { class: 'dlg' },
     h('div', { class: 'sheet-photo', style: pictureStyle({ ...card, photo_url: c?.peer.photo_url }) }),
-    h('h3', {}, card.name, ' ', flag(card.country)),
+    h('h3', {}, h('span', { class: 'who-name', 'data-gender': card.gender }, card.name), ' ', flag(card.country)),
     card.about ? h('p', { style: { margin: 0, lineHeight: 1.5, color: 'var(--text-2)' } }, card.about) : null,
     h('div', { class: 'facts' }, facts.map((f) => h('span', { class: 'fact' }, f))),
     h('div', { class: 'actions' },
@@ -806,7 +820,7 @@ function openReport(targetType, targetId) {
 
 function openEditCard() {
   const me = state.me;
-  let intent = me.intent;
+  const tagBox = tagEditor([...(me.tags || [])]);
   let photoId; // undefined = unchanged, null = clear
   const err = h('div', { class: 'error-text', role: 'alert' });
   const preview = h('div', { class: 'sheet-photo', style: { height: '180px', ...pictureStyle(me) } });
@@ -829,7 +843,7 @@ function openEditCard() {
     class: 'dlg',
     onsubmit: async (e) => {
       e.preventDefault();
-      const body = { intent, about: about.value.trim(), location: loc.value.trim() };
+      const body = { tags: tagBox.value(), about: about.value.trim(), location: loc.value.trim() };
       if (photoId !== undefined) body.photo_id = photoId;
       try {
         state.me = await api('PATCH', '/me', body);
@@ -841,10 +855,12 @@ function openEditCard() {
   },
     h('h3', {}, t('editCard')),
     preview,
-    h('div', { class: 'actions', style: { justifyContent: 'flex-start' } },
-      h('label', { class: 'btn sm', for: 'edit-photo' }, t('changePhoto')), photoIn,
-      h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { photoId = null; Object.assign(preview.style, pictureStyle({ name: me.name })); } }, t('removePhoto'))),
-    h('div', { class: 'field' }, h('span', {}, t('intent')), chipGroup(t('intent'), INTENTS, intent, (v) => { intent = v; })),
+    me.kind === 'member'
+      ? h('div', { class: 'actions', style: { justifyContent: 'flex-start' } },
+        h('label', { class: 'btn sm', for: 'edit-photo' }, t('changePhoto')), photoIn,
+        h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { photoId = null; Object.assign(preview.style, pictureStyle({ name: me.name })); } }, t('removePhoto')))
+      : h('p', { class: 'fine' }, 'Guests wear the face drawn from their name. Create an account to add your own photo.'),
+    h('div', { class: 'field' }, h('span', {}, t('tags')), tagBox.el),
     h('label', { class: 'field' }, h('span', {}, t('location')), loc),
     h('label', { class: 'field' }, h('span', {}, t('about')), about),
     err,
@@ -995,19 +1011,167 @@ const HANDLERS = {
 // Screen: Mod desk
 // ---------------------------------------------------------------------------
 
-let deskTab = 'reports';
+let deskTab = 'overview';
+let deskTimer = null;
+const isAdmin = () => state.me?.role === 'admin';
 
 function renderDesk() {
   state.screen = 'desk';
+  clearInterval(deskTimer);
   const back = h('button', { class: 'btn sm', type: 'button', onclick: () => { location.hash = ''; } }, t('backToChat'));
   const main = h('main', {});
-  const navBtn = (key, label) => h('button', {
+  const tabs = [['overview', 'Overview'], ['reports', t('reports')], ['people', 'People online'], ['words', t('words')],
+    isAdmin() && ['staff', 'Staff'], ['audit', t('audit')]].filter(Boolean);
+  const nav = h('nav', { 'aria-label': t('desk') }, tabs.map(([key, label]) => h('button', {
     type: 'button', 'aria-current': String(deskTab === key),
     onclick: () => { deskTab = key; renderDesk(); },
-  }, label);
-  const nav = h('nav', { 'aria-label': t('desk') }, navBtn('reports', t('reports')), navBtn('words', t('words')), navBtn('audit', t('audit')));
+  }, label)));
   $('#app').replaceChildren(h('div', { class: 'shell' }, topbar(back), h('div', { class: 'desk' }, nav, main)));
-  ({ reports: deskReports, words: deskWords, audit: deskAudit })[deskTab](main);
+  ({ overview: deskOverview, reports: deskReports, people: deskPeople, words: deskWords, staff: deskStaff, audit: deskAudit })[deskTab](main);
+}
+
+// ---------- Overview ----------
+
+async function deskOverview(main) {
+  const stamp = h('span', { class: 'muted', style: { fontSize: '13px' } });
+  const body = h('div', { class: 'overview' });
+  main.append(h('div', { class: 'desk-head' }, h('h1', {}, 'Overview'), stamp), body);
+  const load = async () => {
+    let o;
+    try { o = await api('GET', '/admin/overview'); } catch (ex) { body.replaceChildren(h('p', { class: 'error-text' }, ex.message)); return; }
+    if (!body.isConnected) { clearInterval(deskTimer); return; }
+    stamp.textContent = `Live, updated ${new Date(o.generated_at).toLocaleTimeString()}`;
+    body.replaceChildren(...overviewView(o));
+  };
+  await load();
+  deskTimer = setInterval(load, 15000);
+}
+
+function overviewView(o) {
+  const n = (x) => (x ?? 0).toLocaleString();
+  const of = (x, one, many) => `${n(x)} ${x === 1 ? one : many}`;
+  const tile = (label, value, sub, alert) => h('div', { class: `tile${alert ? ' alert' : ''}` },
+    h('span', { class: 'tile-label' }, label), h('span', { class: 'tile-value' }, value), sub ? h('span', { class: 'tile-sub' }, sub) : null);
+  const tiles = h('div', { class: 'tiles' },
+    tile('Online now', n(o.now.online), `${of(o.now.guests, 'guest', 'guests')}, ${of(o.now.members, 'member', 'members')}, ${n(o.now.staff)} staff`),
+    tile('Private chats', n(o.now.open_chats), `${of(o.now.knocks_waiting, 'knock', 'knocks')} waiting`),
+    tile('New people, 24h', n(o.people.guests_24h + o.people.members_24h), `${of(o.people.guests_24h, 'guest', 'guests')}, ${of(o.people.members_24h, 'member', 'members')}`),
+    tile('Messages, 24h', n(o.messages.room_24h + o.messages.private_24h), `${n(o.messages.room_24h)} in the room, ${n(o.messages.private_24h)} private`),
+    tile('Open reports', n(o.safety.open_reports), 'waiting for a moderator', o.safety.open_reports > 0),
+    tile('Members', n(o.people.members_total), `${n(o.people.members_7d)} joined this week`),
+    tile('Sanctions', n(o.safety.banned_users + o.safety.muted_users), `${n(o.safety.banned_users)} banned, ${n(o.safety.muted_users)} muted, ${n(o.safety.ip_bans)} device bans`));
+
+  // Messages per hour: stacked room and private bars.
+  const max = Math.max(1, ...o.messages.per_hour.map((b) => b.room + b.private));
+  const bars = h('div', { class: 'bars', role: 'img', 'aria-label': 'Messages per hour, last 24 hours' },
+    o.messages.per_hour.map((b, i) => {
+      const at = new Date(b.hour * 1000);
+      const label = at.toLocaleTimeString([], { hour: 'numeric' });
+      return h('div', { class: 'bar', title: `${label}: ${b.room} room, ${b.private} private` },
+        h('div', { class: 'stack' },
+          h('span', { class: 'private', style: { height: `${(b.private / max) * 100}%` } }),
+          h('span', { class: 'room', style: { height: `${(b.room / max) * 100}%` } })),
+        h('span', { class: 'bar-label' }, i % 3 === 0 || i === 23 ? label : ''));
+    }));
+  const chart = h('section', { class: 'panel-card wide' },
+    h('div', { class: 'card-head' }, h('h2', {}, 'Messages per hour'),
+      h('span', { class: 'legend' }, h('i', { class: 'room' }), 'Room', h('i', { class: 'private' }), 'Private')),
+    bars, h('p', { class: 'fine' }, `Busiest hour: ${max} messages. Last 24 hours, your local time.`));
+
+  const ranked = (title, entries, render, empty) => h('section', { class: 'panel-card' }, h('h2', {}, title),
+    entries.length ? h('ol', { class: 'ranked' }, entries.map(([k, v]) => {
+      const top = entries[0][1] || 1;
+      return h('li', {}, h('span', { class: 'rk-name' }, render(k)), h('span', { class: 'rk-bar' }, h('span', { style: { width: `${(v / top) * 100}%` } })), h('span', { class: 'rk-n' }, n(v)));
+    })) : h('p', { class: 'fine' }, empty));
+  const byCount = (obj) => Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
+  const countryName = (cc) => (cc && cc !== 'unknown' ? [flag(cc), ' ', cc] : 'Unknown');
+
+  return [tiles, h('div', { class: 'panels' },
+    chart,
+    ranked('Online by country', byCount(o.now.countries).slice(0, 8), countryName, 'Nobody online.'),
+    ranked('Top tags online', byCount(o.now.tags).slice(0, 8), (k) => k, 'Nobody online has a tag.'),
+    ranked('New people by country, 7 days', o.signup_countries_7d.map((c) => [c.country, c.signups]), countryName, 'No sign-ups this week.'),
+    ranked('Report reasons, 7 days', byCount(o.safety.report_reasons_7d), (k) => REASONS[k] || k, 'No reports this week.'))];
+}
+
+// ---------- People online ----------
+
+function deskPeople(main) {
+  const people = [...state.online.values()].sort((a, b) => (a.online_since || 0) - (b.online_since || 0));
+  main.append(h('div', { class: 'desk-head' }, h('h1', {}, 'People online'), h('span', { class: 'muted' }, `${people.length} besides you`)));
+  if (!people.length) { main.append(h('div', { class: 'empty' }, 'Nobody else is online.')); return; }
+  const act = async (path, body) => { if (await modAct(path, body)) renderDesk(); };
+  main.append(h('div', { class: 'table' }, people.map((p) => h('div', {},
+    avatar(p, 36),
+    h('span', { class: 'grow' }, h('b', { class: 'who-name', 'data-gender': p.gender }, p.name), ` ${p.age} · ${genderLabel(p.gender)} · ${p.kind}${p.role !== 'user' ? ` · ${p.role}` : ''} `, flag(p.country),
+      h('br'), h('small', { class: 'muted' }, `${[hereFor(p.online_since), ...(p.tags || []), p.location].filter(Boolean).join(' · ')}`)),
+    p.role === 'user' && h('span', { class: 'row-actions' },
+      h('button', { class: 'btn sm', type: 'button', onclick: () => showMessages(p) }, 'Messages'),
+      h('button', { class: 'btn sm', type: 'button', onclick: () => act(`/admin/users/${p.id}/mute`, { minutes: 30 }) }, t('mute30')),
+      h('button', { class: 'btn sm', type: 'button', onclick: () => act(`/admin/users/${p.id}/kick`) }, t('kick')),
+      h('button', { class: 'btn sm danger', type: 'button', onclick: () => act(`/admin/users/${p.id}/ban`, { minutes: 1440, ip: false, reason: 'from control panel' }) }, t('ban24')))))));
+}
+
+async function showMessages(p) {
+  let msgs;
+  try { msgs = await api('GET', `/admin/users/${p.id}/messages`); } catch (ex) { toast(ex.message, true); return; }
+  let d;
+  d = dialog(h('div', { class: 'dlg' },
+    h('h3', {}, `${p.name}: recent messages`),
+    msgs?.length
+      ? h('div', { class: 'evidence', style: { maxHeight: '50vh', overflowY: 'auto' } }, msgs.map((m) =>
+        h('span', {}, m.recipient_id ? '(private) ' : '', h('span', { style: { color: 'var(--text-2)' } }, m.body || '[photo]'))))
+      : h('p', { class: 'fine' }, 'No messages in the last 7 days.'),
+    h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, t('close')))));
+}
+
+// ---------- Staff (admin only) ----------
+
+async function deskStaff(main) {
+  main.append(h('div', { class: 'desk-head' }, h('h1', {}, 'Staff'), h('span', { class: 'muted' }, 'Only the admin can add or change staff.')));
+  let staff;
+  try { staff = await api('GET', '/admin/staff'); } catch (ex) { main.append(h('p', { class: 'error-text' }, ex.message)); return; }
+  const setRole = async (id, role) => {
+    try { await api('PUT', `/admin/users/${id}/role`, { role }); toast('Role updated.'); renderDesk(); } catch (ex) { toast(ex.message, true); }
+  };
+  main.append(h('div', { class: 'table' }, staff.map((m) => h('div', {},
+    avatar(m, 36),
+    h('span', { class: 'grow' }, h('b', { class: 'who-name', 'data-gender': m.gender }, m.name), h('br'), h('small', { class: 'muted' }, m.email)),
+    h('span', { class: `tag ${m.role === 'admin' ? 'block' : ''}` }, m.role),
+    m.id !== state.me.id && h('span', { class: 'row-actions' },
+      h('button', { class: 'btn sm', type: 'button', onclick: () => setRole(m.id, m.role === 'admin' ? 'moderator' : 'admin') }, m.role === 'admin' ? 'Make moderator' : 'Make admin'),
+      h('button', { class: 'btn sm danger', type: 'button', onclick: () => setRole(m.id, 'user') }, 'Remove from staff'))))));
+
+  // New staff account.
+  let role = 'moderator';
+  let gender = 'other';
+  const err = h('div', { class: 'error-text', role: 'alert' });
+  const f = (name, attrs) => h('input', { class: 'input', name, ...attrs });
+  const form = h('form', {
+    class: 'panel-card staff-form',
+    onsubmit: async (e) => {
+      e.preventDefault();
+      err.textContent = '';
+      const v = (k) => form.querySelector(`[name=${k}]`).value.trim();
+      try {
+        await api('POST', '/admin/staff', { name: v('name'), age: Number(v('age')), gender, email: v('email'), password: form.querySelector('[name=password]').value, role });
+        toast('Staff account created. Share the email and password with them privately.');
+        renderDesk();
+      } catch (ex) { err.textContent = ex.message; }
+    },
+  },
+    h('h2', {}, 'Add a staff member'),
+    h('p', { class: 'fine' }, 'Staff sign in with this email and password. Ask them to keep it private; there is no self sign-up for staff.'),
+    h('div', { class: 'row' },
+      h('label', { class: 'field' }, h('span', {}, t('name')), f('name', { maxlength: 32, required: true, autocomplete: 'off' })),
+      h('label', { class: 'field' }, h('span', {}, t('age')), f('age', { type: 'number', min: 18, max: 99, required: true, value: '18' }))),
+    h('div', { class: 'field' }, h('span', {}, t('gender')), chipGroup(t('gender'), GENDERS, gender, (v) => { gender = v; })),
+    h('label', { class: 'field' }, h('span', {}, t('email')), f('email', { type: 'email', required: true, autocomplete: 'off' })),
+    h('label', { class: 'field' }, h('span', {}, 'Temporary password'), f('password', { type: 'password', minlength: 8, required: true, autocomplete: 'new-password' })),
+    h('div', { class: 'field' }, h('span', {}, 'Role'), chipGroup('Role', { moderator: 'Moderator', admin: 'Admin' }, role, (v) => { role = v; })),
+    err,
+    h('div', { class: 'actions', style: { justifyContent: 'flex-start' } }, h('button', { class: 'btn primary', type: 'submit' }, 'Create staff account')));
+  main.append(form);
 }
 
 async function deskReports(main) {

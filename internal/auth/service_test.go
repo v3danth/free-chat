@@ -37,7 +37,7 @@ func newService() (*auth.Service, *usertest.Memory, fakeIPBans) {
 var home = auth.Origin{IP: "203.0.113.9"}
 
 func profile(name string) user.Profile {
-	return user.Profile{Name: name, Gender: user.GenderOther, Age: 21, Intent: user.IntentTalk}
+	return user.Profile{Name: name, Gender: user.GenderOther, Age: 21}
 }
 
 func TestGuestJoinsWithCountryAndResumes(t *testing.T) {
@@ -180,5 +180,26 @@ func TestGuestEndpointContract(t *testing.T) {
 		if rec := post(bad); rec.Code != http.StatusBadRequest {
 			t.Errorf("body %s: status = %d, want 400", bad, rec.Code)
 		}
+	}
+}
+
+func TestCreateStaff(t *testing.T) {
+	svc, repo, _ := newService()
+	ctx := context.Background()
+	reg := auth.Registration{Profile: profile("mod_alex"), Email: "alex@example.com", Password: "a-good-password"}
+
+	if _, err := svc.CreateStaff(ctx, reg, user.RoleUser); err == nil {
+		t.Fatal("a plain user role must be refused")
+	}
+	u, err := svc.CreateStaff(ctx, reg, user.RoleModerator)
+	if err != nil || u.Role != user.RoleModerator || u.Kind != user.KindMember {
+		t.Fatalf("CreateStaff: %+v, %v", u, err)
+	}
+	if _, err := svc.Login(ctx, auth.Credentials{Email: "alex@example.com", Password: "a-good-password", Origin: home}); err != nil {
+		t.Fatalf("staff cannot log in: %v", err)
+	}
+	staff, _ := repo.ListStaff(ctx)
+	if len(staff) != 1 || staff[0].ID != u.ID {
+		t.Fatalf("ListStaff: %+v", staff)
 	}
 }
