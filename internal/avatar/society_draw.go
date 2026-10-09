@@ -296,8 +296,10 @@ func rampColor(ramp [4]string, b float64) string {
 }
 
 // MarkSVG draws the low-poly style. The SVG holds only numbers and colours
-// this package produced, never user text.
-func MarkSVG(m Mark) []byte {
+// this package produced, never user text. animate adds the Grandmaster
+// sheen; it is off for avatars shown in lists, and always hidden for
+// people who ask their system for reduced motion.
+func MarkSVG(m Mark, animate bool) []byte {
 	sc := buildScene(m)
 	var b strings.Builder
 	b.WriteString(`<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">`)
@@ -330,8 +332,9 @@ func MarkSVG(m Mark) []byte {
 				it.seg[0][0], it.seg[0][1], it.seg[1][0], it.seg[1][1], fill, it.segW)
 		}
 	}
-	if sc.shimmer {
-		b.WriteString(`<rect x="-100" y="0" width="60" height="100" fill="url(#s)" style="mix-blend-mode:screen"><animate attributeName="x" from="-100" to="160" dur="3.2s" repeatCount="indefinite"/></rect>`)
+	if sc.shimmer && animate {
+		b.WriteString(`<style>@media (prefers-reduced-motion: reduce) { .sheen { display: none; } }</style>`)
+		b.WriteString(`<rect class="sheen" x="-100" y="0" width="60" height="100" fill="url(#s)" style="mix-blend-mode:screen"><animate attributeName="x" from="-100" to="160" dur="3.2s" repeatCount="indefinite"/></rect>`)
 	}
 	b.WriteString(`</svg>`)
 	return []byte(b.String())

@@ -44,7 +44,7 @@ let shown = '';
 async function show(name) {
   const display = name.trim() || 'stranger';
   shown = key(name);
-  $('big-poly').src = markURL(name, '?style=poly');
+  $('big-poly').src = markURL(name, '?style=poly&anim=1');
   $('big-pixel').src = markURL(name, '?style=pixel&scale=9');
   $('big-poly').alt = $('big-pixel').alt = `Society mark for ${display}`;
   $('enter-as').href = `/?name=${encodeURIComponent(name.trim())}`;

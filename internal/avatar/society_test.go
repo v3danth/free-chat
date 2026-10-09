@@ -59,6 +59,13 @@ func TestMarkEndpoints(t *testing.T) {
 	if body := rec.Body.String(); rec.Header().Get("Content-Type") != "image/svg+xml" || !strings.HasPrefix(body, "<svg") || strings.Contains(body, "night owl") {
 		t.Fatalf("poly: %s %.80s", rec.Header().Get("Content-Type"), body)
 	}
+	// The Grandmaster sheen only moves when asked for, and respects reduced motion.
+	if body := get(URLV2("night_owl") + "?style=poly").Body.String(); strings.Contains(body, "<animate") {
+		t.Error("list avatars must not animate")
+	}
+	if body := get(URLV2("night_owl") + "?style=poly&anim=1").Body.String(); !strings.Contains(body, "<animate") || !strings.Contains(body, "prefers-reduced-motion") {
+		t.Error("anim=1 must animate and honour reduced motion")
+	}
 	var info MarkSummary
 	if err := json.Unmarshal(get(URLV2("Night Owl")+"/info").Body.Bytes(), &info); err != nil || info.Name != "night owl" || info.Rank == "" || len(info.Number) != 4 {
 		t.Fatalf("info: %+v %v", info, err)

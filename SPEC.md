@@ -59,11 +59,12 @@ Everyone online receives a `presence` update.
   "country": "IN",
   "has_photo": true,
   "online_since": 1791490000,
-  "avatar_url": "/avatar/v1/<name>",
-  "avatar_tier": "rare"
+  "avatar_url": "/avatar/v2/<name>",
+  "avatar_tier": "adept"
 }
 ```
-- `avatar_url` is everyone's pixel face, drawn from their name (section 2b).
+- `avatar_url` is everyone's society mark, drawn from their name, and
+  `avatar_tier` its rank (section 2c).
 - `country` is ISO 3166-1 alpha-2 from the visitor's IP at sign-up (empty
   when unknown). Render it as an SVG flag, not an emoji.
 - A Card never carries a photo: everyone is shown as their face.
@@ -114,7 +115,7 @@ for an idle animation. Show it with `image-rendering: pixelated`.
 ### GET /avatar/rules → 200
 The limits every animal follows (face size, ears, eye shapes and sizes,
 mouths, colours), its chance of being drawn, and an `example` name that
-draws it. The page at `/faces` is built on these three routes.
+draws it. (On this branch `/faces` uses the V2 routes in section 2c.)
 
 ---
 
@@ -125,8 +126,9 @@ a mark on the brow, a rank and a member number, drawn from the name alone.
 Cards point `avatar_url` at V2 and carry the rank as `avatar_tier`
 (initiate 75%, adept 17%, keeper 6%, grandmaster 2%).
 
-### GET /avatar/v2/{name}?style=poly|pixel&scale=1..16
+### GET /avatar/v2/{name}?style=poly|pixel&scale=1..16&anim=1
 `poly` is a low-poly SVG; `pixel` is a 32 x 32 PNG (`scale` multiplies it).
+`anim=1` adds the Grandmaster sheen to a poly mark (hidden under reduced motion).
 Without `style` the server's `AVATAR_STYLE` config decides, and the
 response is cached for a day; with `style` it is cached for a year.
 

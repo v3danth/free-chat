@@ -55,7 +55,7 @@ func URL(name string) string {
 //	GET /avatar/v1/{name}?scale=1..16&blink=1  PNG, 24 px per scale step
 //	GET /avatar/v1/{name}/info                 JSON description of the face
 //	GET /avatar/rules                          the rules every animal follows
-//	GET /avatar/v2/{name}?style=poly|pixel&scale=1..16  a society mark
+//	GET /avatar/v2/{name}?style=poly|pixel&scale=1..16&anim=1  a society mark
 //	GET /avatar/v2/{name}/info                 JSON description of the mark
 //	GET /avatar/parts                          everything a mark can be made of
 //
@@ -91,7 +91,7 @@ func serveMark(w http.ResponseWriter, r *http.Request, defaultStyle string) {
 	m := For2(name)
 	var data []byte
 	if style == StylePoly {
-		data = MarkSVG(m)
+		data = MarkSVG(m, q.Get("anim") == "1")
 		w.Header().Set("Content-Type", "image/svg+xml")
 	} else {
 		if data, err = MarkPNG(m, scale); err != nil {
