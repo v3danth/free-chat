@@ -53,8 +53,8 @@ func ToCard(u User, onlineSince time.Time) Card {
 		Location: u.Profile.Location,
 		Country:  u.Country,
 	}
-	face := avatar.For(u.Profile.Name)
-	c.Avatar, c.AvatarTier = avatar.URL(u.Profile.Name), face.Tier
+	mark := avatar.For2(u.Profile.Name)
+	c.Avatar, c.AvatarTier = avatar.URLV2(u.Profile.Name), mark.Rank
 	c.HasPhoto = u.PhotoKey != nil
 	if !onlineSince.IsZero() {
 		c.OnlineSince = onlineSince.Unix()

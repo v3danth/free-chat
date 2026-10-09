@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"github.com/v3danth/free-chat/internal/avatar"
 	"log"
 	"os"
 	"strconv"
@@ -13,6 +14,8 @@ import (
 
 type Config struct {
 	ServerPort string
+	// AvatarStyle draws society marks as "poly" (SVG) or "pixel" (PNG).
+	AvatarStyle string
 	// BehindProxy trusts X-Forwarded-For; enable only behind your own proxy.
 	BehindProxy bool
 
@@ -59,6 +62,7 @@ func Load() (Config, error) {
 	e := &env{}
 	cfg := Config{
 		ServerPort:  e.required("SERVER_PORT"),
+		AvatarStyle: get(e, "AVATAR_STYLE", avatar.StylePoly, avatar.ParseStyle),
 		BehindProxy: get(e, "BEHIND_PROXY", false, strconv.ParseBool),
 
 		MySQLHost:     e.required("MYSQL_HOST"),

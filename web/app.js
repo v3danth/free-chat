@@ -21,7 +21,7 @@ const WORDS = {
     about: 'About', aboutPh: 'One line about you (optional)',
     photo: 'Add a photo', photoHint: 'Optional. Shown only to people whose knock you answer, or who answer yours.',
     enter: 'Enter the room',
-    fine: 'You must be 18 or older. Be kind; reports are read by real people.',
+    fine: 'Adults 18+ only. Kink-friendly, consent first: block or report anyone, any time. Reports are read by real people.',
     email: 'Email', password: 'Password', signIn: 'Sign in', back: 'Back',
     room: 'The Room', lastLines: 'Only the last 20 lines are kept',
     sayRoom: 'Say something to the room...', send: 'Send', sendPhoto: 'Send a photo',
@@ -66,7 +66,9 @@ const REASONS = { spam: 'Spam', harassment: 'Harassment', nudity: 'Nudity', viol
 const t = (key, vars = {}) => (WORDS[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
 const genderLabel = (g) => GENDERS[g] ?? g;
 // Suggestions only: people can type any tag (up to 3, 20 characters each).
-const TAG_IDEAS = ['just talk', 'night owl', 'flirt', 'vent', 'music', 'gaming', 'study break', 'something real'];
+// Adults-only community: common kink-scene terms between consenting adults.
+const TAG_IDEAS = ['dom', 'sub', 'switch', 'bdsm', 'roleplay', 'bondage', 'brat', 'praise', 'rope', 'leather',
+  'sensory play', 'exhibitionist', 'voyeur', 'kink curious', 'aftercare', 'just talk'];
 const MAX_TAGS = 3;
 
 // ---------------------------------------------------------------------------
@@ -126,7 +128,7 @@ function icon(name, size = 20) {
 function faceURL(person) {
   if (person.avatar_url) return person.avatar_url;
   const key = (person.name || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
-  return `/avatar/v1/${encodeURIComponent(key || 'stranger')}`;
+  return `/avatar/v2/${encodeURIComponent(key || 'stranger')}`;
 }
 
 // pictureStyle shows the best image the viewer may see: a member's photo

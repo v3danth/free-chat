@@ -192,9 +192,9 @@ textarea.input { height: auto; padding: 12px 14px; resize: none; line-height: 1.
   border: 1px solid var(--line-2); text-align: left; padding: 0; transition: transform 0.15s ease, border-color 0.15s ease;
 }
 .pcard:hover { transform: translateY(-2px); border-color: #3A3C46; }
-.pcard[data-tier="rare"] { border-color: #34496B; }
-.pcard[data-tier="epic"] { border-color: #4E3A6E; }
-.pcard[data-tier="legendary"] { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 0 18px rgba(255,181,71,0.25); }
+.pcard[data-tier="rare"], .pcard[data-tier="adept"] { border-color: #34496B; }
+.pcard[data-tier="epic"], .pcard[data-tier="keeper"] { border-color: #4E3A6E; }
+.pcard[data-tier="legendary"], .pcard[data-tier="grandmaster"] { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 0 18px rgba(255,181,71,0.25); }
 .pcard .photo {
   aspect-ratio: 1; display: flex; align-items: flex-end; justify-content: space-between; padding: 8px;
   background-size: cover; background-position: center; position: relative;

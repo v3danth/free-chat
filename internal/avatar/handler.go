@@ -21,7 +21,27 @@ const (
 var (
 	errName  = apperr.New(apperr.Invalid, "name must be at most 128 bytes")
 	errScale = apperr.New(apperr.Invalid, "scale must be between 1 and 16")
+	errStyle = apperr.New(apperr.Invalid, "style must be poly or pixel")
 )
+
+// Styles a V2 mark can be drawn in.
+const (
+	StylePoly  = "poly"  // low-poly SVG
+	StylePixel = "pixel" // 32 x 32 PNG
+)
+
+// ParseStyle accepts poly or pixel.
+func ParseStyle(s string) (string, error) {
+	if s != StylePoly && s != StylePixel {
+		return "", errStyle
+	}
+	return s, nil
+}
+
+// URLV2 is where the society mark for name is served, in the default style.
+func URLV2(name string) string {
+	return "/avatar/" + VersionV2 + "/" + url.PathEscape(Normalize(name))
+}
 
 // URL is where the face for name is served. The version keeps old cached
 // images from being reused after the art changes.
@@ -35,10 +55,69 @@ func URL(name string) string {
 //	GET /avatar/v1/{name}?scale=1..16&blink=1  PNG, 24 px per scale step
 //	GET /avatar/v1/{name}/info                 JSON description of the face
 //	GET /avatar/rules                          the rules every animal follows
-func Routes(mux *http.ServeMux) {
+//	GET /avatar/v2/{name}?style=poly|pixel&scale=1..16  a society mark
+//	GET /avatar/v2/{name}/info                 JSON description of the mark
+//	GET /avatar/parts                          everything a mark can be made of
+//
+// defaultStyle is used for V2 marks when the URL names no style.
+func Routes(mux *http.ServeMux, defaultStyle string) {
 	mux.HandleFunc("GET /avatar/"+Version+"/{name}", servePNG)
 	mux.HandleFunc("GET /avatar/"+Version+"/{name}/info", serveInfo)
 	mux.HandleFunc("GET /avatar/rules", serveRules)
+	mux.HandleFunc("GET /avatar/"+VersionV2+"/{name}", func(w http.ResponseWriter, r *http.Request) { serveMark(w, r, defaultStyle) })
+	mux.HandleFunc("GET /avatar/"+VersionV2+"/{name}/info", serveMarkInfo)
+	mux.HandleFunc("GET /avatar/parts", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		httpx.JSON(w, http.StatusOK, Parts())
+	})
+}
+
+func serveMark(w http.ResponseWriter, r *http.Request, defaultStyle string) {
+	name, err := nameOf(r)
+	q := r.URL.Query()
+	style, scale := defaultStyle, 1
+	if err == nil && q.Has("style") {
+		style, err = ParseStyle(q.Get("style"))
+	}
+	if err == nil && q.Has("scale") {
+		if scale, err = strconv.Atoi(q.Get("scale")); err != nil || scale < 1 || scale > maxScale {
+			err = errScale
+		}
+	}
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	m := For2(name)
+	var data []byte
+	if style == StylePoly {
+		data = MarkSVG(m)
+		w.Header().Set("Content-Type", "image/svg+xml")
+	} else {
+		if data, err = MarkPNG(m, scale); err != nil {
+			httpx.Error(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+	}
+	if q.Has("style") {
+		cacheForever(w)
+	} else {
+		// The default style is config, so it may change: cache for a day.
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+	}
+	w.Write(data)
+}
+
+func serveMarkInfo(w http.ResponseWriter, r *http.Request) {
+	name, err := nameOf(r)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	cacheForever(w)
+	httpx.JSON(w, http.StatusOK, For2(name).Summary())
 }
 
 func nameOf(r *http.Request) (string, error) {

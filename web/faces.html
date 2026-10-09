@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Find your face - Drift</title>
-<meta name="description" content="Type any name and see the pixel animal it draws. Same name, same face, every time. Then walk into the chat room as it.">
+<title>Find your mark - Drift</title>
+<meta name="description" content="Type any name and see the society mark it draws: an animal mask, a metal, a rank and a member number. Same name, same mark, every time.">
 <meta name="theme-color" content="#0E0F13">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/faces.css">
 </head>
@@ -16,28 +16,32 @@
 <div class="faces-page">
   <header class="topbar">
     <a class="brand" href="/">Drift<b>.</b></a>
-    <div class="right"><a class="btn sm primary" href="/" id="enter-top">Enter the room</a></div>
+    <div class="right"><a class="btn sm primary" href="/">Enter the room</a></div>
   </header>
 
   <main class="faces">
     <section class="hero-faces">
       <div class="hero-copy">
-        <h1>Your name is <em>your face.</em></h1>
-        <p class="lede">Type any name. The same name always draws the same pixel animal, on every phone and laptop. Change one letter and you get someone new.</p>
+        <h1>Every name is a member of <em>the society.</em></h1>
+        <p class="lede">Type a name and it is sworn in: an animal mask, a metal, a mark on the brow, a rank and a member number. Same name, same mark, always.</p>
         <label class="field name-field" for="name">
           <span>Name</span>
-          <input class="input" id="name" maxlength="32" autocomplete="off" spellcheck="false" value="sleepy_bean">
+          <input class="input" id="name" maxlength="32" autocomplete="off" spellcheck="false" value="night_owl">
         </label>
         <dl class="specs" id="specs" aria-live="polite"></dl>
       </div>
 
       <div class="big-card">
-        <div class="frame" id="frame"><img id="big" alt="" width="288" height="288"></div>
-        <div class="big-name" id="big-name"></div>
+        <div class="pair">
+          <figure><div class="frame" id="frame-poly"><img id="big-poly" alt="" width="288" height="288"></div><figcaption>Low-poly</figcaption></figure>
+          <figure><div class="frame" id="frame-pixel"><img id="big-pixel" alt="" width="288" height="288"></div><figcaption>Pixel</figcaption></figure>
+        </div>
+        <div class="mark-title" id="mark-title"></div>
+        <span class="mark-number" id="mark-number"></span>
         <span class="tier" id="big-tier"></span>
         <div class="big-actions">
           <a class="btn primary" id="enter-as" href="/">Enter as this name</a>
-          <a class="btn" id="save" href="#" download>Save image</a>
+          <a class="btn" id="save" href="#" download>Save pixel image</a>
           <button class="btn ghost" id="copy" type="button">Copy link</button>
         </div>
       </div>
@@ -46,8 +50,8 @@
     <section class="block">
       <div class="block-head">
         <div>
-          <h2>Who might be in the room</h2>
-          <p>Every face is drawn from its name alone. Tap one to look closer.</p>
+          <h2>Members tonight</h2>
+          <p>Every mark is drawn from its name alone. Tap one to look closer.</p>
         </div>
         <button class="btn outline" id="shuffle" type="button">New names</button>
       </div>
@@ -57,8 +61,8 @@
     <section class="block">
       <div class="block-head">
         <div>
-          <h2>Rarity</h2>
-          <p>Rarity comes from the name too, so a legendary name is legendary for anyone who types it.</p>
+          <h2>Ranks</h2>
+          <p>Rank comes from the name too. Higher ranks wear more ornate frames; only Grandmasters wear gold.</p>
         </div>
       </div>
       <div class="tiers" id="tiers"></div>
@@ -67,11 +71,11 @@
     <section class="block">
       <div class="block-head">
         <div>
-          <h2>The rules each animal follows</h2>
-          <p>Every feature is picked inside its animal's limits, so a frog never gets cat ears and a bunny never wears a cap over its ears.</p>
+          <h2>What a mark is made of</h2>
+          <p>Every part is picked from the name, inside limits that keep each animal recognisable.</p>
         </div>
       </div>
-      <div class="table-wrap"><table id="rules"></table></div>
+      <div class="parts" id="parts"></div>
     </section>
   </main>
 </div>

@@ -114,6 +114,31 @@ draws it. The page at `/faces` is built on these three routes.
 
 ---
 
+## 2c. Society marks (faces V2)
+
+On this branch everyone's face is a society mark: an animal mask, a metal,
+a mark on the brow, a rank and a member number, drawn from the name alone.
+Cards point `avatar_url` at V2 and carry the rank as `avatar_tier`
+(initiate 75%, adept 17%, keeper 6%, grandmaster 2%).
+
+### GET /avatar/v2/{name}?style=poly|pixel&scale=1..16
+`poly` is a low-poly SVG; `pixel` is a 32 x 32 PNG (`scale` multiplies it).
+Without `style` the server's `AVATAR_STYLE` config decides, and the
+response is cached for a day; with `style` it is cached for a year.
+
+### GET /avatar/v2/{name}/info → 200
+```json
+{ "name": "night_owl", "rank": "grandmaster", "title": "The Lantern Fox", "number": "2101",
+  "animal": "Fox", "metal": "Gold", "eyes": "glow", "glow": "Lantern", "mark": "third eye",
+  "frame": "Circle", "face_width": 0.95, "ears": 0.88, "snout": 0.99, "url": "/avatar/v2/night_owl" }
+```
+
+### GET /avatar/parts → 200
+Everything a mark can be made of (animals, metals, eyes, glows, marks,
+frames) and the chance of each rank. The page at `/faces` uses these routes.
+
+---
+
 ## 3. WebSocket: GET /ws?token=...
 
 ### Server → client

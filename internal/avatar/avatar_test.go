@@ -84,7 +84,7 @@ func TestEveryFaceStaysInsideItsRules(t *testing.T) {
 
 func TestEndpoint(t *testing.T) {
 	mux := http.NewServeMux()
-	Routes(mux)
+	Routes(mux, StylePoly)
 
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest("GET", URL("Night Owl")+"?scale=4", nil))

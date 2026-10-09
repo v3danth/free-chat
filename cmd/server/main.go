@@ -109,7 +109,7 @@ func run() error {
 	mux := http.NewServeMux()
 	mux.Handle("GET /", http.FileServer(http.Dir("./web")))
 	mux.HandleFunc("GET /faces", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "./web/faces.html") })
-	avatar.Routes(mux)
+	avatar.Routes(mux, cfg.AvatarStyle)
 	auth.Routes(mux, authSvc, ipOf)
 	media.Routes(mux, mediaSvc, authSvc, ipOf, cfg.MediaMaxUploadSize)
 	websocket.Routes(mux, hub, authSvc, users, ipOf)
