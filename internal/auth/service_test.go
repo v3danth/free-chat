@@ -203,3 +203,29 @@ func TestCreateStaff(t *testing.T) {
 		t.Fatalf("ListStaff: %+v", staff)
 	}
 }
+
+func TestLoginAttemptsAreLimited(t *testing.T) {
+	svc, _, _ := newService()
+	ctx := context.Background()
+	if _, err := svc.Register(ctx, auth.Registration{Profile: profile("member1"), Email: "m@example.com", Password: "right-password", Origin: home}); err != nil {
+		t.Fatal(err)
+	}
+	wrong := auth.Credentials{Email: "m@example.com", Password: "wrong-password", Origin: home}
+	for i := range 8 {
+		if _, err := svc.Login(ctx, wrong); !errors.Is(err, auth.ErrInvalidCredentials) {
+			t.Fatalf("attempt %d: %v", i+1, err)
+		}
+	}
+	right := wrong
+	right.Password = "right-password"
+	if _, err := svc.Login(ctx, right); !errors.Is(err, auth.ErrTooManyLogins) {
+		t.Fatalf("ninth attempt on one email must be refused, even with the right password: %v", err)
+	}
+	// Another email from the same IP still works (the IP limit is higher).
+	if _, err := svc.Register(ctx, auth.Registration{Profile: profile("member2"), Email: "n@example.com", Password: "right-password", Origin: home}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Login(ctx, auth.Credentials{Email: "n@example.com", Password: "right-password", Origin: home}); err != nil {
+		t.Fatalf("other email: %v", err)
+	}
+}

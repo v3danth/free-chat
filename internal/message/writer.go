@@ -9,7 +9,7 @@ import (
 const (
 	batchSize   = 100
 	batchWindow = 20 * time.Millisecond
-	writeWait   = 5 * time.Second
+	writeWait   = 5 * time.Second // per insert, so one stall cannot pile up
 )
 
 type batchInserter interface {
@@ -25,6 +25,7 @@ type Writer struct {
 	in    chan Message
 	flush chan chan struct{}
 	done  chan struct{}
+	wait  time.Duration // deadline for each insert
 }
 
 func NewWriter(repo batchInserter, buffer int) *Writer {
@@ -33,6 +34,7 @@ func NewWriter(repo batchInserter, buffer int) *Writer {
 		in:    make(chan Message, buffer),
 		flush: make(chan chan struct{}),
 		done:  make(chan struct{}),
+		wait:  writeWait,
 	}
 }
 
@@ -115,17 +117,23 @@ func (w *Writer) Run(ctx context.Context) {
 func (w *Writer) Done() <-chan struct{} { return w.done }
 
 func (w *Writer) write(batch []Message) {
-	ctx, cancel := context.WithTimeout(context.Background(), writeWait)
-	defer cancel()
-	err := w.repo.InsertBatch(ctx, batch)
+	err := w.insert(batch)
 	if err == nil {
 		return
 	}
 	log.Printf("message writer: batch of %d failed, retrying one by one: %v", len(batch), err)
 	// One bad row (say, its sender was purged) must not lose the others.
+	// Each retry gets its own deadline: if the batch timed out, reusing its
+	// context would fail every retry at once.
 	for _, m := range batch {
-		if err := w.repo.InsertBatch(ctx, []Message{m}); err != nil {
+		if err := w.insert([]Message{m}); err != nil {
 			log.Printf("message writer: dropped message %d: %v", m.ID, err)
 		}
 	}
+}
+
+func (w *Writer) insert(batch []Message) error {
+	ctx, cancel := context.WithTimeout(context.Background(), w.wait)
+	defer cancel()
+	return w.repo.InsertBatch(ctx, batch)
 }

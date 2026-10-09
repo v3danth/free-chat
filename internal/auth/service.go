@@ -22,6 +22,7 @@ var (
 	ErrSessionEnded       = apperr.New(apperr.Unauthorized, "session ended, please join again")
 	ErrBanned             = apperr.New(apperr.Forbidden, "you are banned")
 	ErrTooManySignups     = apperr.New(apperr.RateLimited, "too many new profiles from your network, try again later")
+	ErrTooManyLogins      = apperr.New(apperr.RateLimited, "too many sign-in attempts, try again in a few minutes")
 )
 
 // dummyHash lets Login spend the same bcrypt time whether or not the email
@@ -80,6 +81,10 @@ type Service struct {
 	words   *filter.Live
 	ipKey   []byte
 	signups *ratelimit.Limiter
+	// Sign-in attempts, per IP and per email: both are checked before the
+	// (deliberately slow) password comparison.
+	loginsByIP    *ratelimit.Limiter
+	loginsByEmail *ratelimit.Limiter
 }
 
 func NewService(users user.Repository, tokens Tokens, ipBans IPBans, locator geo.Locator, words *filter.Live, ipKey string) *Service {
@@ -91,7 +96,9 @@ func NewService(users user.Repository, tokens Tokens, ipBans IPBans, locator geo
 		words:  words,
 		ipKey:  []byte(ipKey),
 		// Generous: Indian mobile carriers put many people behind one IP.
-		signups: ratelimit.New(ratelimit.Config{Rate: 30, Window: 10 * time.Minute}),
+		signups:       ratelimit.New(ratelimit.Config{Rate: 30, Window: 10 * time.Minute}),
+		loginsByIP:    ratelimit.New(ratelimit.Config{Rate: 20, Window: 10 * time.Minute}),
+		loginsByEmail: ratelimit.New(ratelimit.Config{Rate: 8, Window: 10 * time.Minute}),
 	}
 }
 
@@ -133,6 +140,9 @@ func (s *Service) Register(ctx context.Context, reg Registration) (user.User, er
 	if err != nil {
 		return user.User{}, err
 	}
+	if !s.signups.Allow(bucket(ipHash)) {
+		return user.User{}, ErrTooManySignups
+	}
 	profile, err := reg.Profile.Screened(s.words.Load().Screen)
 	if err != nil {
 		return user.User{}, err
@@ -152,8 +162,15 @@ func (s *Service) CreateStaff(ctx context.Context, reg Registration, role user.R
 }
 
 func (s *Service) Login(ctx context.Context, c Credentials) (Session, error) {
-	if _, err := s.admit(ctx, c.Origin); err != nil {
+	ipHash, err := s.admit(ctx, c.Origin)
+	if err != nil {
 		return Session{}, err
+	}
+	// Both limits count every attempt, so neither one can be used to probe
+	// whether the other is exhausted.
+	byIP, byEmail := s.loginsByIP.Allow(bucket(ipHash)), s.loginsByEmail.Allow(bucket(s.HashIP("email:"+c.Email)))
+	if !byIP || !byEmail {
+		return Session{}, ErrTooManyLogins
 	}
 	u, err := s.users.GetByEmail(ctx, c.Email)
 	if err != nil && !errors.Is(err, user.ErrNotFound) {

@@ -164,6 +164,15 @@ type helloEvent struct {
 	Online    []user.Card   `json:"online"`
 	Rooms     []roomView    `json:"rooms"`
 	RateLimit rateLimitView `json:"rate_limit"`
+	// Doors are this user's private chats that survive a reconnect.
+	Doors []doorView `json:"doors"`
+}
+
+type doorView struct {
+	With uint64 `json:"with"`
+	Open bool   `json:"open"`
+	// KnockedByMe: still a knock, sent by this user (waiting on them).
+	KnockedByMe bool `json:"knocked_by_me,omitempty"`
 }
 
 type presenceEvent struct {
