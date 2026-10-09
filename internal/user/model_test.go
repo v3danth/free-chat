@@ -23,6 +23,8 @@ func TestProfileInputParse(t *testing.T) {
 		{"tamil name", with(func(in *ProfileInput) { in.Name = "கார்த்திக்" }), true},
 		{"inner space", with(func(in *ProfileInput) { in.Name = "Ravi  K" }), true},
 		{"no tags", with(func(in *ProfileInput) { in.Tags = nil }), true},
+		{"a name colour", with(func(in *ProfileInput) { in.Color = "lime" }), true},
+		{"an unknown colour", with(func(in *ProfileInput) { in.Color = "#000000" }), false},
 		{"free-form tags in any script", with(func(in *ProfileInput) { in.Tags = []string{"night owl", "K-pop", "क्रिकेट"} }), true},
 		{"location with punctuation", with(func(in *ProfileInput) { in.Location = "St. John's, NL" }), true},
 		{"empty location", with(func(in *ProfileInput) { in.Location = "" }), true},
@@ -45,6 +47,9 @@ func TestProfileInputParse(t *testing.T) {
 			p, err := tt.in.Parse()
 			if (err == nil) != tt.ok {
 				t.Fatalf("ok = %v, err = %v", tt.ok, err)
+			}
+			if tt.ok && p.Color == "" {
+				t.Fatal("a colour must always be set (stone by default)")
 			}
 			if tt.ok && p.Tags == nil {
 				t.Fatal("tags must never be nil, so they encode as []")

@@ -127,7 +127,7 @@ type peer struct {
 func (h *harness) join(name string) *peer {
 	h.t.Helper()
 	s, err := h.auth.CreateGuest(context.Background(), auth.GuestSignup{
-		Profile: user.Profile{Name: name, Gender: user.GenderOther, Age: 22},
+		Profile: user.Profile{Name: name, Gender: user.GenderOther, Age: 22, Color: "mint"},
 	})
 	if err != nil {
 		h.t.Fatal(err)
@@ -193,7 +193,7 @@ func TestRoomPresenceAndHistory(t *testing.T) {
 
 	ravi.send(map[string]any{"type": "chat", "room_id": 1, "content": "darn it"})
 	for _, p := range []*peer{asha, ravi} {
-		if got := p.expect("chat"); got["content"] != "d*** it" || got["name"] != "ravi" || got["filtered"] != true || got["gender"] != "other" {
+		if got := p.expect("chat"); got["content"] != "d*** it" || got["name"] != "ravi" || got["filtered"] != true || got["color"] != "mint" {
 			t.Fatalf("broadcast = %v", got)
 		}
 	}

@@ -13,6 +13,8 @@ import (
 
 type Config struct {
 	ServerPort string
+	// AppName is the brand shown in titles, the logo and copy.
+	AppName string
 	// BehindProxy trusts X-Forwarded-For; enable only behind your own proxy.
 	BehindProxy bool
 
@@ -59,6 +61,7 @@ func Load() (Config, error) {
 	e := &env{}
 	cfg := Config{
 		ServerPort:  e.required("SERVER_PORT"),
+		AppName:     get(e, "APP_NAME", "Drift", text),
 		BehindProxy: get(e, "BEHIND_PROXY", false, strconv.ParseBool),
 
 		MySQLHost:     e.required("MYSQL_HOST"),

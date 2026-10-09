@@ -22,7 +22,7 @@ var upgrader = websocket.Upgrader{
 
 type Profiles interface {
 	GetByID(ctx context.Context, id uint64) (user.User, error)
-	UpdateCard(ctx context.Context, id uint64, tags []string, about, location string, photoID *uint64) error
+	UpdateCard(ctx context.Context, id uint64, card user.Profile, photoID *uint64) error
 }
 
 func Routes(mux *http.ServeMux, hub *Hub, authSvc *auth.Service, profiles Profiles, ipOf httpx.IPResolver) {
@@ -76,6 +76,7 @@ func (h handler) me(w http.ResponseWriter, r *http.Request, id auth.Identity) {
 // stays raw to tell "absent" (keep) from null (clear).
 type cardUpdate struct {
 	Tags     *[]string       `json:"tags"`
+	Color    *string         `json:"color"`
 	About    *string         `json:"about"`
 	Location *string         `json:"location"`
 	PhotoID  json.RawMessage `json:"photo_id"`
@@ -92,6 +93,11 @@ func (req cardUpdate) apply(u user.User) (user.Profile, *uint64, error) {
 	var err error
 	if req.Tags != nil {
 		if p.Tags, err = user.ParseTags(*req.Tags); err != nil {
+			return p, nil, err
+		}
+	}
+	if req.Color != nil {
+		if p.Color, err = user.ParseColor(*req.Color); err != nil {
 			return p, nil, err
 		}
 	}
@@ -149,7 +155,7 @@ func (h handler) updateMe(w http.ResponseWriter, r *http.Request, id auth.Identi
 		return
 	}
 
-	if err := h.profiles.UpdateCard(r.Context(), id.UserID, p.Tags, p.About, p.Location, photo); err != nil {
+	if err := h.profiles.UpdateCard(r.Context(), id.UserID, p, photo); err != nil {
 		httpx.Error(w, err)
 		return
 	}

@@ -25,6 +25,7 @@ import (
 	"github.com/v3danth/free-chat/internal/message"
 	"github.com/v3danth/free-chat/internal/moderation"
 	"github.com/v3danth/free-chat/internal/ratelimit"
+	"github.com/v3danth/free-chat/internal/site"
 	"github.com/v3danth/free-chat/internal/user"
 	"github.com/v3danth/free-chat/internal/websocket"
 )
@@ -108,7 +109,9 @@ func run() error {
 	ipOf := httpx.NewIPResolver(cfg.BehindProxy)
 	mux := http.NewServeMux()
 	mux.Handle("GET /", http.FileServer(http.Dir("./web")))
-	mux.HandleFunc("GET /faces", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "./web/faces.html") })
+	if err := site.Routes(mux, "./web", cfg.AppName); err != nil {
+		return err
+	}
 	avatar.Routes(mux)
 	auth.Routes(mux, authSvc, ipOf)
 	media.Routes(mux, mediaSvc, authSvc, ipOf, cfg.MediaMaxUploadSize)

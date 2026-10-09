@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Find your face - Drift</title>
+<title>Find your face - {{.Name}}</title>
+<meta name="application-name" content="{{.Name}}">
 <meta name="description" content="Type any name and see the pixel animal it draws. Same name, same face, every time. Then walk into the chat room as it.">
 <meta name="theme-color" content="#0E0F13">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,7 +16,7 @@
 <body>
 <div class="faces-page">
   <header class="topbar">
-    <a class="brand" href="/">Drift<b>.</b></a>
+    <a class="brand" href="/">{{.Name}}<b>.</b></a>
     <div class="right"><a class="btn sm primary" href="/" id="enter-top">Enter the room</a></div>
   </header>
 

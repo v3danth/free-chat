@@ -2,6 +2,7 @@ package user
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -67,6 +68,7 @@ type Profile struct {
 	Gender   Gender
 	Age      uint8
 	Tags     []string // what they are here for, in their own words
+	Color    string   // a NameColors key: how their name is shown
 	About    string
 	Location string
 }
@@ -120,6 +122,7 @@ var (
 	errGender   = apperr.New(apperr.Invalid, "gender must be one of male, female, non-binary, femboy, other, couple")
 	errAge      = apperr.New(apperr.Invalid, "you must be 18 or older")
 	errTags     = apperr.New(apperr.Invalid, "add up to 3 tags of 1-20 letters or numbers each")
+	errColor    = apperr.New(apperr.Invalid, "pick one of the name colours")
 	errAbout    = apperr.New(apperr.Invalid, "about must be at most 140 characters")
 	errLocation = apperr.New(apperr.Invalid, "location must be at most 40 letters")
 )
@@ -150,6 +153,24 @@ func ParseGender(s string) (Gender, error) {
 		return g, nil
 	}
 	return "", errGender
+}
+
+// NameColors are the colours a name can be shown in. The UI defines the
+// matching hex values (web/style.css); each is at least 8:1 on the dark
+// background, so any choice stays readable.
+var NameColors = []string{"sky", "rose", "lavender", "orchid", "mint", "lime", "lemon", "peach", "coral", "ice", "stone"}
+
+const defaultColor = "stone"
+
+// ParseColor accepts a NameColors key; empty means the default.
+func ParseColor(s string) (string, error) {
+	if s == "" {
+		return defaultColor, nil
+	}
+	if !slices.Contains(NameColors, s) {
+		return "", errColor
+	}
+	return s, nil
 }
 
 var tagPattern = regexp.MustCompile(`^[\p{L}\p{M}\p{N}_ -]+$`)
@@ -226,6 +247,7 @@ type ProfileInput struct {
 	Gender   string   `json:"gender"`
 	Age      int      `json:"age"`
 	Tags     []string `json:"tags"`
+	Color    string   `json:"color"`
 	About    string   `json:"about"`
 	Location string   `json:"location"`
 }
@@ -246,6 +268,10 @@ func (in ProfileInput) Parse() (Profile, error) {
 	if err != nil {
 		return Profile{}, err
 	}
+	color, err := ParseColor(in.Color)
+	if err != nil {
+		return Profile{}, err
+	}
 	about, err := ParseAbout(in.About)
 	if err != nil {
 		return Profile{}, err
@@ -254,5 +280,5 @@ func (in ProfileInput) Parse() (Profile, error) {
 	if err != nil {
 		return Profile{}, err
 	}
-	return Profile{Name: name, Gender: gender, Age: uint8(in.Age), Tags: tags, About: about, Location: location}, nil
+	return Profile{Name: name, Gender: gender, Age: uint8(in.Age), Tags: tags, Color: color, About: about, Location: location}, nil
 }

@@ -127,7 +127,7 @@ type chatEvent struct {
 	RoomID    uint64     `json:"room_id"`
 	SenderID  uint64     `json:"sender_id"`
 	Name      string     `json:"name"`
-	Gender    string     `json:"gender,omitempty"` // the sender's, for name colours
+	Color     string     `json:"color,omitempty"` // the sender's name colour
 	Content   string     `json:"content,omitempty"`
 	Image     *imageView `json:"image,omitempty"`
 	Timestamp int64      `json:"ts"`
@@ -213,14 +213,14 @@ var codeByKind = map[apperr.Kind]string{
 	apperr.RateLimited:  "RATE_LIMITED",
 }
 
-func roomEvent(m message.Message, gender string, att media.Attachment, filtered bool) chatEvent {
+func roomEvent(m message.Message, color string, att media.Attachment, filtered bool) chatEvent {
 	return chatEvent{
 		Type:      "chat",
 		ID:        m.ID,
 		RoomID:    m.RoomID,
 		SenderID:  m.SenderID,
 		Name:      m.SenderName,
-		Gender:    gender,
+		Color:     color,
 		Content:   m.Body,
 		Image:     imageOf(att),
 		Timestamp: id.Time(m.ID).Unix(),
@@ -234,7 +234,7 @@ func entryEvent(e message.Entry) chatEvent {
 	if e.MediaKey != "" {
 		att = media.AttachmentOf(e.MediaID, e.MediaKey)
 	}
-	return roomEvent(e.Message, e.SenderGender, att, false)
+	return roomEvent(e.Message, e.SenderColor, att, false)
 }
 
 func directEvent(m message.Message, att media.Attachment, knock, filtered bool) dmEvent {

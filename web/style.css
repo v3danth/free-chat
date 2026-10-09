@@ -14,14 +14,19 @@
   --danger: #FF7A6B;
   --danger-soft: #2A1E1E;
   --ok: #8FD3A6;
-  /* Name colours by gender: hues spread around the wheel, light enough for
-     at least 7:1 contrast on --bg, and none of them amber (amber means action). */
-  --g-male: #7FB2FF;
-  --g-female: #FF8FC7;
-  --g-non-binary: #C3A6FF;
-  --g-femboy: #F2A0F0;
-  --g-couple: #7FDDBE;
-  --g-other: #D8D1C4;
+  /* Name colours people pick (keys match NameColors on the server). Each
+     is at least 8:1 on --card, so any choice stays readable. */
+  --c-sky: #7FB2FF;
+  --c-rose: #FF8FC7;
+  --c-lavender: #C3A6FF;
+  --c-orchid: #F2A0F0;
+  --c-mint: #7FDDBE;
+  --c-lime: #B9E07A;
+  --c-lemon: #F2E27A;
+  --c-peach: #FFB08A;
+  --c-coral: #FF9A8F;
+  --c-ice: #9FE6F2;
+  --c-stone: #D8D1C4;
   --radius: 14px;
   --display: 'Bricolage Grotesque', system-ui, sans-serif;
   --body: 'Instrument Sans', system-ui, sans-serif;
@@ -46,12 +51,23 @@ a:hover { color: var(--amber-hi); }
 .muted { color: var(--muted); }
 .brand { font-family: var(--display); font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
 .brand b { color: var(--amber); font-weight: 700; }
-.who-name { color: var(--g-other); }
-.who-name[data-gender="male"] { color: var(--g-male); }
-.who-name[data-gender="female"] { color: var(--g-female); }
-.who-name[data-gender="non-binary"] { color: var(--g-non-binary); }
-.who-name[data-gender="femboy"] { color: var(--g-femboy); }
-.who-name[data-gender="couple"] { color: var(--g-couple); }
+[data-color="sky"] { --name: var(--c-sky); }
+[data-color="rose"] { --name: var(--c-rose); }
+[data-color="lavender"] { --name: var(--c-lavender); }
+[data-color="orchid"] { --name: var(--c-orchid); }
+[data-color="mint"] { --name: var(--c-mint); }
+[data-color="lime"] { --name: var(--c-lime); }
+[data-color="lemon"] { --name: var(--c-lemon); }
+[data-color="peach"] { --name: var(--c-peach); }
+[data-color="coral"] { --name: var(--c-coral); }
+[data-color="ice"] { --name: var(--c-ice); }
+[data-color="stone"] { --name: var(--c-stone); }
+.who-name { color: var(--name, var(--c-stone)); }
+.color-picker { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; background: var(--name); padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25); }
+.swatch[aria-checked="true"] { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg) inset; }
+.color-preview { font-weight: 600; font-size: 15px; }
 
 /* ---------- Buttons and fields ---------- */
 .btn {

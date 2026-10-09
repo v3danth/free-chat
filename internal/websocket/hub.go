@@ -322,7 +322,7 @@ func (h *Hub) sendRoom(c *Client, cmd roomSendCmd) error {
 		return err
 	}
 	m := message.NewRoom(h.IDs.Next(), cmd.room, c.id(), out.name, out.body, out.att.ID)
-	ev := roomEvent(m, out.gender, out.att, out.filtered)
+	ev := roomEvent(m, out.color, out.att, out.filtered)
 	frame := encode(ev)
 
 	h.mu.Lock()
@@ -416,7 +416,7 @@ func (h *Hub) knockLocked(from, to uint64, hasImage, commit bool) (knock, opened
 
 type prepared struct {
 	name     string
-	gender   string
+	color    string
 	body     string
 	filtered bool
 	att      media.Attachment
@@ -426,7 +426,7 @@ type prepared struct {
 // rate limit, word filter, and image ownership.
 func (h *Hub) prepare(c *Client, content string, mediaID uint64) (prepared, error) {
 	h.mu.RLock()
-	name, gender, muted := c.user.Profile.Name, string(c.user.Profile.Gender), c.user.MutedUntil
+	name, color, muted := c.user.Profile.Name, c.user.Profile.Color, c.user.MutedUntil
 	h.mu.RUnlock()
 
 	if muted != nil && time.Now().Before(*muted) {
@@ -439,7 +439,7 @@ func (h *Hub) prepare(c *Client, content string, mediaID uint64) (prepared, erro
 	if res.Blocked {
 		return prepared{}, errBlockedWords
 	}
-	out := prepared{name: name, gender: gender, body: res.Content, filtered: res.Filtered}
+	out := prepared{name: name, color: color, body: res.Content, filtered: res.Filtered}
 	if mediaID != 0 {
 		err := h.withDB(func(ctx context.Context) (err error) {
 			out.att, err = h.Media.Attach(ctx, mediaID, c.id())

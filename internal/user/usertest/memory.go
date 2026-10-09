@@ -61,9 +61,9 @@ func (m *Memory) GetByEmail(_ context.Context, email string) (user.User, error) 
 	return user.User{}, user.ErrNotFound
 }
 
-func (m *Memory) UpdateCard(_ context.Context, id uint64, tags []string, about, location string, photoID *uint64) error {
+func (m *Memory) UpdateCard(_ context.Context, id uint64, card user.Profile, photoID *uint64) error {
 	return m.update(id, func(u *user.User) {
-		u.Profile.Tags, u.Profile.About, u.Profile.Location, u.PhotoID = tags, about, location, photoID
+		u.Profile.Tags, u.Profile.Color, u.Profile.About, u.Profile.Location, u.PhotoID = card.Tags, card.Color, card.About, card.Location, photoID
 	})
 }
 

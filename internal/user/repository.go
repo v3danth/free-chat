@@ -25,9 +25,10 @@ type Repository interface {
 	Create(ctx context.Context, u User) (User, error)
 	GetByID(ctx context.Context, id uint64) (User, error)
 	GetByEmail(ctx context.Context, email string) (User, error)
-	// UpdateCard changes the editable card fields; photoID must belong to
-	// the user and not be removed, or ErrPhotoNotYours.
-	UpdateCard(ctx context.Context, id uint64, tags []string, about, location string, photoID *uint64) error
+	// UpdateCard saves the editable card fields (tags, colour, about,
+	// location); photoID must belong to the user and not be removed, or
+	// ErrPhotoNotYours.
+	UpdateCard(ctx context.Context, id uint64, card Profile, photoID *uint64) error
 	Touch(ctx context.Context, id uint64) error
 	SetRole(ctx context.Context, id uint64, role Role) error
 	// SetBan sets or clears a ban; banning also revokes every token.
@@ -46,7 +47,7 @@ func NewRepository(db *sql.DB) *MySQLRepository {
 }
 
 const selectUser = `
-	SELECT u.id, u.kind, u.role, u.name, u.gender, u.age, u.tags, u.about, u.location,
+	SELECT u.id, u.kind, u.role, u.name, u.gender, u.age, u.tags, u.name_color, u.about, u.location,
 	       u.country_code, u.photo_media_id, m.file_key, u.email, u.password_hash,
 	       u.token_version, u.banned_until, u.muted_until, u.ip_hash, u.last_seen_at, u.created_at
 	FROM users u
@@ -54,12 +55,12 @@ const selectUser = `
 
 func (r *MySQLRepository) Create(ctx context.Context, u User) (User, error) {
 	const query = `
-		INSERT INTO users (kind, role, name, gender, age, tags, about, location,
+		INSERT INTO users (kind, role, name, gender, age, tags, name_color, about, location,
 		                   country_code, email, password_hash, ip_hash)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	p := u.Profile
-	res, err := r.db.ExecContext(ctx, query, u.Kind, u.Role, p.Name, p.Gender, p.Age, tagsJSON(p.Tags),
+	res, err := r.db.ExecContext(ctx, query, u.Kind, u.Role, p.Name, p.Gender, p.Age, tagsJSON(p.Tags), p.Color,
 		p.About, p.Location, nullString(u.Country), u.Email, u.PasswordHash, u.IPHash)
 	switch {
 	case database.IsDuplicateKeyOn(err, memberNameIndex):
@@ -85,13 +86,13 @@ func (r *MySQLRepository) GetByEmail(ctx context.Context, email string) (User, e
 	return r.one(ctx, selectUser+`WHERE u.email = ?`, email)
 }
 
-func (r *MySQLRepository) UpdateCard(ctx context.Context, id uint64, tags []string, about, location string, photoID *uint64) error {
+func (r *MySQLRepository) UpdateCard(ctx context.Context, id uint64, card Profile, photoID *uint64) error {
 	const query = `
-		UPDATE users SET tags = ?, about = ?, location = ?, photo_media_id = ?
+		UPDATE users SET tags = ?, name_color = ?, about = ?, location = ?, photo_media_id = ?
 		WHERE id = ? AND (? IS NULL OR EXISTS (
 			SELECT 1 FROM media WHERE id = ? AND owner_id = ? AND removed_at IS NULL))`
 
-	res, err := r.db.ExecContext(ctx, query, tagsJSON(tags), about, location, photoID, id, photoID, photoID, id)
+	res, err := r.db.ExecContext(ctx, query, tagsJSON(card.Tags), card.Color, card.About, card.Location, photoID, id, photoID, photoID, id)
 	if err != nil {
 		return err
 	}
@@ -172,7 +173,7 @@ func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	)
 	err := row.Scan(
 		&u.ID, &u.Kind, &u.Role, &u.Profile.Name, &u.Profile.Gender, &u.Profile.Age,
-		&tags, &u.Profile.About, &u.Profile.Location, &country, &u.PhotoID,
+		&tags, &u.Profile.Color, &u.Profile.About, &u.Profile.Location, &country, &u.PhotoID,
 		&u.PhotoKey, &u.Email, &u.PasswordHash, &u.TokenVersion, &banned, &muted,
 		&u.IPHash, &u.LastSeenAt, &u.CreatedAt,
 	)

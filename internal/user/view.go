@@ -18,6 +18,7 @@ type Card struct {
 	Gender      Gender   `json:"gender"`
 	Age         uint8    `json:"age"`
 	Tags        []string `json:"tags"`
+	Color       string   `json:"color"`
 	About       string   `json:"about,omitempty"`
 	Location    string   `json:"location,omitempty"`
 	Country     string   `json:"country,omitempty"`
@@ -49,6 +50,7 @@ func ToCard(u User, onlineSince time.Time) Card {
 		Gender:   u.Profile.Gender,
 		Age:      u.Profile.Age,
 		Tags:     u.Profile.Tags,
+		Color:    u.Profile.Color,
 		About:    u.Profile.About,
 		Location: u.Profile.Location,
 		Country:  u.Country,

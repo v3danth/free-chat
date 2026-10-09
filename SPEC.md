@@ -8,13 +8,16 @@ hours and are revoked instantly by a ban.
 
 ---
 
+The brand (page titles, logo, copy) comes from `APP_NAME` in the server's
+config; the default is Drift.
+
 ## 1. Joining
 
 ### POST /auth/guest → 201
 A one-visit profile card. No email, no password.
 
 ```json
-{ "name": "rahul", "gender": "male", "age": 24, "tags": ["night owl", "cricket"],
+{ "name": "rahul", "gender": "male", "age": 24, "tags": ["night owl", "cricket"], "color": "mint",
   "about": "cannot sleep, can talk", "location": "Delhi" }
 ```
 
@@ -23,6 +26,7 @@ A one-visit profile card. No email, no password.
 | name | 2–32 letters/digits/underscore in any script, single inner spaces; staff words (admin, moderator, ...) reserved; not unique for guests |
 | gender | male, female, non-binary, femboy, other, couple |
 | age | 18–99 |
+| color | Name colour, one of: sky, rose, lavender, orchid, mint, lime, lemon, peach, coral, ice, stone (default) |
 | tags | "Here to": up to 3 free-form tags, 1-20 letters, numbers, spaces, `_` or `-` each, any script; duplicates ignoring case are dropped; optional |
 | about | up to 140 characters |
 | location | optional, up to 40 characters ("Mumbai", "St. John's, NL") |
@@ -40,7 +44,7 @@ Returns `Self`. Members then log in.
 `{ "email": "...", "password": "..." }` → `{ "token": "...", "user": Self }`
 
 ### GET /me → 200, PATCH /me → 200
-PATCH changes only `tags`, `about`, `location` and `photo_id` (an image you
+PATCH changes only `tags`, `color`, `about`, `location` and `photo_id` (an image you
 uploaded; `null` clears it). Fields you leave out keep their value. Name,
 age and gender are fixed for the visit. Only members can set a photo;
 guests get `403` and are always shown as their face.
@@ -50,7 +54,7 @@ Everyone online receives a `presence` update.
 ```json
 {
   "id": 7, "kind": "guest", "role": "user",
-  "name": "rahul", "gender": "male", "age": 24, "tags": ["night owl", "cricket"],
+  "name": "rahul", "gender": "male", "age": 24, "tags": ["night owl", "cricket"], "color": "mint",
   "about": "...", "location": "Delhi",
   "country": "IN",
   "has_photo": true,
@@ -123,7 +127,7 @@ draws it. The page at `/faces` is built on these three routes.
 | `hello` | on connect | `you` (Self), `online` (Cards), `rooms` (`[{id, name}]`), `rate_limit` (`{remaining, reset_in_seconds}`) |
 | `presence` | someone joins, edits, leaves | `event`: `join` (also a reconnect), `update`, `leave`; `user_id`; `user` (Card, not on leave) |
 | `history` | after `join` | `room_id`, `messages`: up to 20 chat events, **newest first** |
-| `chat` | a room message | `id, room_id, sender_id, name, gender, content, image?{url, thumb_url}, ts, filtered?` (`gender` is the sender's, for name colours) |
+| `chat` | a room message | `id, room_id, sender_id, name, color, content, image?{url, thumb_url}, ts, filtered?` (`color` is the sender's name colour) |
 | `dm` | a private message (also echoed to the sender) | `id, from, to, content, image?, ts, knock?, filtered?` |
 | `door` | a knock was answered | `with`: the other person's Card plus `photo_url` |
 | `removed` | a moderator removed a message | `message_id` |

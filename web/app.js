@@ -1,4 +1,4 @@
-// Drift: browser client. Plain ES modules, no build step.
+// Browser client. The brand comes from config, via the page's application-name meta. Plain ES modules, no build step.
 // The contract with the server is SPEC.md. Text from the network is only
 // ever rendered with textContent, never as HTML.
 
@@ -57,16 +57,21 @@ const WORDS = {
     reconnecting: 'Reconnecting...',
     ended: 'You left the room.',
     seoTitle: 'Free chat with strangers',
-    seoP: 'Drift is a free chat room for meeting strangers: random chat without registration, on your phone or laptop. Looking for an Omegle alternative or a Y99 alternative? Walk in, make a card and say hi.',
+    seoP: '{app} is a free chat room for meeting strangers: random chat without registration, on your phone or laptop. Looking for an Omegle alternative or a Y99 alternative? Walk in, make a card and say hi.',
 };
 
 const GENDERS = { female: 'Woman', male: 'Man', 'non-binary': 'Non-binary', femboy: 'Femboy', couple: 'Couple', other: 'Other' };
 const REASONS = { spam: 'Spam', harassment: 'Harassment', nudity: 'Nudity', violence: 'Violence', hate: 'Hate', underage: 'Under 18', scam: 'Scam', other: 'Other' };
 
+const APP_NAME = document.querySelector('meta[name=application-name]')?.content || 'Drift';
 const t = (key, vars = {}) => (WORDS[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
 const genderLabel = (g) => GENDERS[g] ?? g;
 // Suggestions only: people can type any tag (up to 3, 20 characters each).
-const TAG_IDEAS = ['just talk', 'night owl', 'flirt', 'vent', 'music', 'gaming', 'study break', 'something real'];
+const TAG_IDEAS = ['situationships', 'college life', 'late night talks', 'memes', 'music recs', 'hot takes', 'gaming', 'anime',
+  'gym', 'fits', 'exam stress', 'study buddy', 'red flags', 'delulu', 'pop culture', 'just vibing'];
+
+// Name colours anyone can pick (keys must match NameColors on the server).
+const NAME_COLORS = ['sky', 'rose', 'lavender', 'orchid', 'mint', 'lime', 'lemon', 'peach', 'coral', 'ice', 'stone'];
 const MAX_TAGS = 3;
 
 // ---------------------------------------------------------------------------
@@ -268,6 +273,21 @@ function tagEditor(tags) {
   };
 }
 
+// colorPicker is a row of swatches with a preview of the name in the colour.
+function colorPicker(selected, nameOf, onPick) {
+  const preview = h('span', { class: 'who-name color-preview', 'data-color': selected }, nameOf() || 'Your name');
+  const group = h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Name colour' }, NAME_COLORS.map((key) =>
+    h('button', {
+      type: 'button', class: 'swatch', role: 'radio', 'aria-checked': String(key === selected), 'aria-label': key, 'data-color': key, title: key,
+      onclick: () => {
+        for (const b of group.children) b.setAttribute('aria-checked', String(b.dataset.color === key));
+        preview.dataset.color = key;
+        onPick(key);
+      },
+    })));
+  return { el: h('div', { class: 'color-picker' }, group, preview), rename: () => { preview.textContent = nameOf() || 'Your name'; } };
+}
+
 function chipGroup(name, options, selected, onPick) {
   const group = h('div', { class: 'chips', role: 'group', 'aria-label': name });
   for (const [value, label] of Object.entries(options)) {
@@ -288,7 +308,7 @@ function chipGroup(name, options, selected, onPick) {
 const enterDraft = {
   mode: 'guest', // guest | join | signin
   name: new URLSearchParams(window.location.search).get('name') || '',
-  age: '', gender: '', tags: [], location: '', about: '', email: '', photo: null,
+  age: '', gender: '', tags: [], color: NAME_COLORS[Math.floor(Math.random() * (NAME_COLORS.length - 1))], location: '', about: '', email: '', photo: null,
 };
 
 function renderEnter(message) {
@@ -308,6 +328,7 @@ function renderEnter(message) {
     { guest: t('enter'), join: 'Create account', signin: t('signIn') }[d.mode]);
 
   const tagBox = tagEditor(d.tags);
+  const colors = colorPicker(d.color, () => d.name.trim(), (key) => { d.color = key; });
   const profileFields = () => [
     h('div', { class: 'photo-pick' },
       d.mode === 'join'
@@ -322,9 +343,10 @@ function renderEnter(message) {
         onchange: (e) => { d.photo = e.target.files[0] || null; showPreview(); },
       })),
     h('div', { class: 'row' },
-      h('label', { class: 'field' }, h('span', {}, t('name')), bind('name', { name: 'name', maxlength: 32, required: true, placeholder: t('namePh'), autocomplete: 'off', oninput: () => { if (!d.photo) showPreview(); } })),
+      h('label', { class: 'field' }, h('span', {}, t('name')), bind('name', { name: 'name', maxlength: 32, required: true, placeholder: t('namePh'), autocomplete: 'off', oninput: () => { if (!d.photo) showPreview(); colors.rename(); } })),
       h('label', { class: 'field' }, h('span', {}, t('age')), bind('age', { name: 'age', type: 'number', min: 18, max: 99, required: true, inputmode: 'numeric', placeholder: '18+' }))),
     h('div', { class: 'field' }, h('span', {}, t('gender')), chipGroup(t('gender'), GENDERS, d.gender, (v) => { d.gender = v; })),
+    h('div', { class: 'field' }, h('span', {}, 'Name colour'), colors.el),
     h('div', { class: 'field' }, h('span', {}, t('tags')), tagBox.el),
     h('label', { class: 'field' }, h('span', {}, t('location')), bind('location', { name: 'location', maxlength: 40, placeholder: t('locationPh') })),
     h('label', { class: 'field' }, h('span', {}, t('about')), bind('about', { name: 'about', maxlength: 140, placeholder: t('aboutPh') })),
@@ -335,7 +357,7 @@ function renderEnter(message) {
       h('input', { class: 'input', name: 'password', type: 'password', required: true, minlength: newAccount ? 8 : null, autocomplete: newAccount ? 'new-password' : 'current-password' })),
   ];
   const profileBody = () => ({
-    name: d.name.trim(), gender: d.gender, age: Number(d.age), tags: tagBox.value(),
+    name: d.name.trim(), gender: d.gender, age: Number(d.age), tags: tagBox.value(), color: d.color,
     about: d.about.trim(), location: d.location.trim(),
   });
 
@@ -388,7 +410,7 @@ function renderEnter(message) {
   $('#app').replaceChildren(
     h('div', { class: 'enter' },
       h('header', { class: 'topbar' },
-        h('span', { class: 'brand' }, 'Drift', h('b', {}, '.')),
+        h('span', { class: 'brand' }, APP_NAME, h('b', {}, '.')),
         h('div', { class: 'right' }, h('a', { class: 'btn sm', href: '/faces' }, 'Find your face'))),
       h('main', { class: 'enter-main' },
         h('section', { class: 'hero' },
@@ -398,7 +420,7 @@ function renderEnter(message) {
         form),
       h('footer', { class: 'seo-foot' },
         h('h2', {}, t('seoTitle')),
-        h('p', {}, t('seoP')),
+        h('p', {}, t('seoP', { app: APP_NAME })),
         h('p', { class: 'fine' }, h('a', { href: 'https://db-ip.com', rel: 'noopener' }, 'IP Geolocation by DB-IP')))),
   );
   form.querySelector('input')?.focus();
@@ -437,7 +459,7 @@ function startRoom() {
 
 function topbar(extra) {
   return h('header', { class: 'topbar' },
-    h('span', { class: 'brand' }, 'Drift', h('b', {}, '.')),
+    h('span', { class: 'brand' }, APP_NAME, h('b', {}, '.')),
     h('div', { class: 'right' },
       h('span', { class: 'live-dot hide-sm', id: 'here-count' }, `${state.online.size + 1} ${t('hereNow')}`),
       extra,
@@ -532,7 +554,7 @@ function feedLine(ev) {
     avatar(person, 32),
     h('div', { class: 'body' },
       h('span', { class: 'meta' },
-        h('button', { type: 'button', class: 'who-name', 'data-gender': ev.gender || person.gender, onclick: () => !mine && openPerson(ev.sender_id, ev.name) }, ev.name),
+        h('button', { type: 'button', class: 'who-name', 'data-color': ev.color || person.color, onclick: () => !mine && openPerson(ev.sender_id, ev.name) }, ev.name),
         mine ? h('span', { class: 'you-tag' }, ` (${t('you')})`) : null,
         person.age ? ` · ${genderLabel(person.gender)}, ${person.age}` : '',
         ` · ${clock(ev.ts)}`,
@@ -599,7 +621,7 @@ function personCard(card) {
       h('span', { class: 'pill' }, hereFor(card.online_since)),
       card.has_photo && !c?.peer.photo_url ? h('span', { class: 'pill', title: 'Has a photo you will see after they reply' }, icon('photo', 14)) : null),
     h('div', { class: 'info' },
-      h('span', { class: 'name' }, h('span', {}, h('span', { class: 'who-name', 'data-gender': card.gender }, card.name), `, ${card.age}`), flag(card.country)),
+      h('span', { class: 'name' }, h('span', {}, h('span', { class: 'who-name', 'data-color': card.color }, card.name), `, ${card.age}`), flag(card.country)),
       h('span', { class: 'sub' }, card.about || [genderLabel(card.gender), card.location].filter(Boolean).join(' · ')),
       tagRow(card.tags),
       h('button', { class: 'btn outline sm', type: 'button', onclick: () => openChat(card.id) }, c ? t('open') : t('knock'))));
@@ -630,7 +652,7 @@ function chatsPane() {
     return h('button', {
       class: 'convo-item', type: 'button', 'aria-current': String(state.active === id),
       onclick: () => openChat(id),
-    }, avatar(c.peer, 40), h('span', { class: 't' }, h('b', { class: 'who-name', 'data-gender': c.peer.gender }, c.peer.name), h('small', {}, preview)), c.unread ? h('span', { class: 'dot' }) : null);
+    }, avatar(c.peer, 40), h('span', { class: 't' }, h('b', { class: 'who-name', 'data-color': c.peer.color }, c.peer.name), h('small', {}, preview)), c.unread ? h('span', { class: 'dot' }) : null);
   }));
 
   const open = state.active != null && state.convos.has(state.active);
@@ -648,7 +670,7 @@ function convoView(peerId) {
   const head = h('div', { class: 'convo-head' },
     h('button', { class: 'icon-btn bare', type: 'button', 'aria-label': t('back'), onclick: () => { state.active = null; renderSide(); } }, icon('back')),
     avatar(peer, 44),
-    h('div', { class: 'who' }, h('b', {}, h('span', { class: 'who-name', 'data-gender': peer.gender }, peer.name), ' ', flag(peer.country)), h('small', {}, meta)),
+    h('div', { class: 'who' }, h('b', {}, h('span', { class: 'who-name', 'data-color': peer.color }, peer.name), ' ', flag(peer.country)), h('small', {}, meta)),
     h('button', { class: 'btn sm ghost', type: 'button', onclick: () => openReport('user', peerId) }, t('report')),
     h('button', { class: 'btn sm', type: 'button', onclick: () => blockPerson(peerId) }, t('block')));
 
@@ -781,7 +803,7 @@ function openPerson(id, fallbackName) {
 
   d = dialog(h('div', { class: 'dlg' },
     h('div', { class: 'sheet-photo', style: pictureStyle({ ...card, photo_url: c?.peer.photo_url }) }),
-    h('h3', {}, h('span', { class: 'who-name', 'data-gender': card.gender }, card.name), ' ', flag(card.country)),
+    h('h3', {}, h('span', { class: 'who-name', 'data-color': card.color }, card.name), ' ', flag(card.country)),
     card.about ? h('p', { style: { margin: 0, lineHeight: 1.5, color: 'var(--text-2)' } }, card.about) : null,
     h('div', { class: 'facts' }, facts.map((f) => h('span', { class: 'fact' }, f))),
     h('div', { class: 'actions' },
@@ -821,6 +843,8 @@ function openReport(targetType, targetId) {
 function openEditCard() {
   const me = state.me;
   const tagBox = tagEditor([...(me.tags || [])]);
+  let color = me.color || 'stone';
+  const colors = colorPicker(color, () => me.name, (key) => { color = key; });
   let photoId; // undefined = unchanged, null = clear
   const err = h('div', { class: 'error-text', role: 'alert' });
   const preview = h('div', { class: 'sheet-photo', style: { height: '180px', ...pictureStyle(me) } });
@@ -843,7 +867,7 @@ function openEditCard() {
     class: 'dlg',
     onsubmit: async (e) => {
       e.preventDefault();
-      const body = { tags: tagBox.value(), about: about.value.trim(), location: loc.value.trim() };
+      const body = { tags: tagBox.value(), color, about: about.value.trim(), location: loc.value.trim() };
       if (photoId !== undefined) body.photo_id = photoId;
       try {
         state.me = await api('PATCH', '/me', body);
@@ -860,6 +884,7 @@ function openEditCard() {
         h('label', { class: 'btn sm', for: 'edit-photo' }, t('changePhoto')), photoIn,
         h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { photoId = null; Object.assign(preview.style, pictureStyle({ name: me.name })); } }, t('removePhoto')))
       : h('p', { class: 'fine' }, 'Guests wear the face drawn from their name. Create an account to add your own photo.'),
+    h('div', { class: 'field' }, h('span', {}, 'Name colour'), colors.el),
     h('div', { class: 'field' }, h('span', {}, t('tags')), tagBox.el),
     h('label', { class: 'field' }, h('span', {}, t('location')), loc),
     h('label', { class: 'field' }, h('span', {}, t('about')), about),
@@ -1103,7 +1128,7 @@ function deskPeople(main) {
   const act = async (path, body) => { if (await modAct(path, body)) renderDesk(); };
   main.append(h('div', { class: 'table' }, people.map((p) => h('div', {},
     avatar(p, 36),
-    h('span', { class: 'grow' }, h('b', { class: 'who-name', 'data-gender': p.gender }, p.name), ` ${p.age} · ${genderLabel(p.gender)} · ${p.kind}${p.role !== 'user' ? ` · ${p.role}` : ''} `, flag(p.country),
+    h('span', { class: 'grow' }, h('b', { class: 'who-name', 'data-color': p.color }, p.name), ` ${p.age} · ${genderLabel(p.gender)} · ${p.kind}${p.role !== 'user' ? ` · ${p.role}` : ''} `, flag(p.country),
       h('br'), h('small', { class: 'muted' }, `${[hereFor(p.online_since), ...(p.tags || []), p.location].filter(Boolean).join(' · ')}`)),
     p.role === 'user' && h('span', { class: 'row-actions' },
       h('button', { class: 'btn sm', type: 'button', onclick: () => showMessages(p) }, 'Messages'),
@@ -1136,7 +1161,7 @@ async function deskStaff(main) {
   };
   main.append(h('div', { class: 'table' }, staff.map((m) => h('div', {},
     avatar(m, 36),
-    h('span', { class: 'grow' }, h('b', { class: 'who-name', 'data-gender': m.gender }, m.name), h('br'), h('small', { class: 'muted' }, m.email)),
+    h('span', { class: 'grow' }, h('b', { class: 'who-name', 'data-color': m.color }, m.name), h('br'), h('small', { class: 'muted' }, m.email)),
     h('span', { class: `tag ${m.role === 'admin' ? 'block' : ''}` }, m.role),
     m.id !== state.me.id && h('span', { class: 'row-actions' },
       h('button', { class: 'btn sm', type: 'button', onclick: () => setRole(m.id, m.role === 'admin' ? 'moderator' : 'admin') }, m.role === 'admin' ? 'Make moderator' : 'Make admin'),
