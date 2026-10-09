@@ -17,9 +17,9 @@ const purgeBatch = 5000
 type Store interface {
 	// PurgeMessages deletes up to batch messages with id < cutoff.
 	PurgeMessages(ctx context.Context, cutoff uint64, batch int) (int64, error)
-	// ExpireGuests deletes guests last seen before cutoff and returns the
-	// file keys of their images, whose rows the delete cascades away.
-	ExpireGuests(ctx context.Context, cutoff time.Time, online []uint64) ([]string, error)
+	// ExpireGuests deletes guests last seen before cutoff and returns their
+	// ids and the file keys of their images, whose rows the delete cascades away.
+	ExpireGuests(ctx context.Context, cutoff time.Time, online []uint64) (guests []uint64, keys []string, err error)
 	PurgeExpiredIPBans(ctx context.Context) (int64, error)
 }
 
@@ -27,8 +27,11 @@ type Files interface {
 	DeleteFiles(key string)
 }
 
-type Online interface {
+// Live is the chat hub: who is online, and its in-memory room history,
+// which must forget what the sweep deletes.
+type Live interface {
 	OnlineIDs() []uint64
+	Forget(beforeID uint64, senders []uint64)
 }
 
 type Config struct {
@@ -37,7 +40,7 @@ type Config struct {
 }
 
 // Run sweeps every cfg.Interval until ctx is cancelled.
-func Run(ctx context.Context, store Store, files Files, online Online, cfg Config) {
+func Run(ctx context.Context, store Store, files Files, online Live, cfg Config) {
 	log.Printf("janitor started: retention=%v interval=%v", cfg.Retention, cfg.Interval)
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()
@@ -51,7 +54,7 @@ func Run(ctx context.Context, store Store, files Files, online Online, cfg Confi
 	}
 }
 
-func Sweep(ctx context.Context, store Store, files Files, online Online, retention time.Duration, now time.Time) {
+func Sweep(ctx context.Context, store Store, files Files, online Live, retention time.Duration, now time.Time) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	cutoff := now.Add(-retention)
@@ -71,13 +74,14 @@ func Sweep(ctx context.Context, store Store, files Files, online Online, retenti
 		}
 	}
 
-	keys, err := store.ExpireGuests(ctx, cutoff, online.OnlineIDs())
+	guests, keys, err := store.ExpireGuests(ctx, cutoff, online.OnlineIDs())
 	if err != nil {
 		log.Printf("janitor: expire guests: %v", err)
 	}
 	for _, k := range keys {
 		files.DeleteFiles(k)
 	}
+	online.Forget(id.Floor(cutoff), guests)
 
 	if _, err := store.PurgeExpiredIPBans(ctx); err != nil {
 		log.Printf("janitor: purge ip bans: %v", err)
@@ -104,10 +108,10 @@ func (s *MySQLStore) PurgeMessages(ctx context.Context, cutoff uint64, batch int
 
 // ExpireGuests reads the image keys and deletes the users in one
 // transaction, under row locks, so no key is lost to the cascade.
-func (s *MySQLStore) ExpireGuests(ctx context.Context, cutoff time.Time, online []uint64) ([]string, error) {
+func (s *MySQLStore) ExpireGuests(ctx context.Context, cutoff time.Time, online []uint64) ([]uint64, []string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer tx.Rollback()
 
@@ -120,18 +124,18 @@ func (s *MySQLStore) ExpireGuests(ctx context.Context, cutoff time.Time, online 
 	}
 	guests, err := database.Collect[uint64](ctx, tx, query+` LIMIT 1000 FOR UPDATE`, args...)
 	if err != nil || len(guests) == 0 {
-		return nil, err
+		return nil, nil, err
 	}
 
 	in, ids := database.In(guests)
 	keys, err := database.Collect[string](ctx, tx, `SELECT file_key FROM media WHERE owner_id IN `+in, ids...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id IN `+in, ids...); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return keys, tx.Commit()
+	return guests, keys, tx.Commit()
 }
 
 func (s *MySQLStore) PurgeExpiredIPBans(ctx context.Context) (int64, error) {

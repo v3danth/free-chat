@@ -53,8 +53,25 @@ func (m *memStore) CreateReport(_ context.Context, r Report) error {
 		}
 	}
 	r.Status = StatusOpen
+	r.ID = uint64(len(m.reports) + 1)
 	m.reports = append(m.reports, r)
 	return nil
+}
+func (m *memStore) GetReport(_ context.Context, id uint64) (Report, error) {
+	for _, r := range m.reports {
+		if r.ID == id {
+			return r, nil
+		}
+	}
+	return Report{}, ErrReportNotFound
+}
+func (m *memStore) WasActioned(_ context.Context, t TargetType, id uint64) (bool, error) {
+	for _, r := range m.reports {
+		if r.TargetType == t && r.TargetID == id && r.Status == StatusActioned {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 func (m *memStore) CountOpen(_ context.Context, t TargetType, id uint64) (int, error) {
 	n := 0
@@ -66,8 +83,14 @@ func (m *memStore) CountOpen(_ context.Context, t TargetType, id uint64) (int, e
 	return n, nil
 }
 func (m *memStore) ListReports(context.Context, Status, int) ([]Report, error) { return m.reports, nil }
-func (m *memStore) SetReportStatus(context.Context, uint64, Status, uint64) error {
-	return nil
+func (m *memStore) SetReportStatus(_ context.Context, id uint64, s Status, _ uint64) error {
+	for i := range m.reports {
+		if m.reports[i].ID == id && m.reports[i].Status == StatusOpen {
+			m.reports[i].Status = s
+			return nil
+		}
+	}
+	return ErrReportNotFound
 }
 func (m *memStore) ResolveTarget(_ context.Context, t TargetType, id uint64, s Status, _ uint64) error {
 	for i := range m.reports {
@@ -104,23 +127,54 @@ func (m *memMessages) Hide(_ context.Context, id uint64) error {
 	m.hidden[id] = true
 	return nil
 }
+func (m *memMessages) Unhide(_ context.Context, id uint64) error {
+	delete(m.hidden, id)
+	return nil
+}
+func (m *memMessages) MediaSeenBy(_ context.Context, mediaID, viewer uint64) (bool, error) {
+	for _, msg := range m.byID {
+		if msg.MediaID == mediaID && (!msg.IsDirect() || msg.Involves(viewer)) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 type noFlush struct{}
 
 func (noFlush) Flush(context.Context) error { return nil }
 
-type noImages struct{}
+// memImages tracks which images are served, hidden (restorable) or removed.
+type memImages struct {
+	byID    map[uint64]media.Media
+	hidden  map[uint64]bool
+	removed map[uint64]bool
+}
 
-func (noImages) Get(context.Context, uint64) (media.Media, error) {
+func (m *memImages) Get(_ context.Context, id uint64) (media.Media, error) {
+	if img, ok := m.byID[id]; ok {
+		return img, nil
+	}
 	return media.Media{}, media.ErrNotFound
 }
-func (noImages) Remove(context.Context, uint64, uint64, bool) (media.Media, error) {
-	return media.Media{}, media.ErrNotFound
+func (m *memImages) Remove(_ context.Context, id, _ uint64, _ bool) (media.Media, error) {
+	m.removed[id], m.hidden[id] = true, false
+	return m.byID[id], nil
+}
+func (m *memImages) Hide(_ context.Context, id uint64) (media.Media, error) {
+	m.hidden[id] = true
+	return m.byID[id], nil
+}
+func (m *memImages) Restore(_ context.Context, id uint64) (bool, error) {
+	was := m.hidden[id]
+	m.hidden[id] = false
+	return was, nil
 }
 
 type liveLog struct {
 	kicked  []uint64
 	removed []uint64
+	doors   map[[2]uint64]bool
 }
 
 func (l *liveLog) Kick(id uint64, _, _ string, _ time.Time) { l.kicked = append(l.kicked, id) }
@@ -128,28 +182,31 @@ func (l *liveLog) Mute(uint64, time.Time)                   {}
 func (l *liveLog) RemoveMessage(m message.Message)          { l.removed = append(l.removed, m.ID) }
 func (l *liveLog) RemoveMedia(uint64)                       {}
 func (l *liveLog) UpdateUser(user.User)                     {}
+func (l *liveLog) DoorOpen(a, b uint64) bool                { return l.doors[[2]uint64{min(a, b), max(a, b)}] }
 
 // --- harness ---
 
 type fixture struct {
-	svc   *Service
-	store *memStore
-	msgs  *memMessages
-	live  *liveLog
-	users *usertest.Memory
-	words *filter.Live
+	svc    *Service
+	store  *memStore
+	msgs   *memMessages
+	images *memImages
+	live   *liveLog
+	users  *usertest.Memory
+	words  *filter.Live
 }
 
 func newFixture(t *testing.T) *fixture {
 	users := usertest.NewMemory()
 	f := &fixture{
-		store: &memStore{ipBans: map[string]time.Time{}},
-		msgs:  &memMessages{byID: map[uint64]message.Message{}, hidden: map[uint64]bool{}},
-		live:  &liveLog{},
-		users: users,
-		words: filter.NewLive(filter.New(100, nil)),
+		store:  &memStore{ipBans: map[string]time.Time{}},
+		msgs:   &memMessages{byID: map[uint64]message.Message{}, hidden: map[uint64]bool{}},
+		images: &memImages{byID: map[uint64]media.Media{}, hidden: map[uint64]bool{}, removed: map[uint64]bool{}},
+		live:   &liveLog{doors: map[[2]uint64]bool{}},
+		users:  users,
+		words:  filter.NewLive(filter.New(100, nil)),
 	}
-	f.svc = NewService(Deps{Store: f.store, Users: users, Messages: f.msgs, Writer: noFlush{}, Images: noImages{},
+	f.svc = NewService(Deps{Store: f.store, Users: users, Messages: f.msgs, Writer: noFlush{}, Images: f.images,
 		Live: f.live, Filter: f.words, MaxLength: 100, AutoHide: 2})
 	return f
 }
@@ -271,5 +328,109 @@ func TestWordsReloadLive(t *testing.T) {
 	}
 	if f.words.Load().Apply("join telegram.me/x").Blocked {
 		t.Fatal("removed rule must stop applying")
+	}
+}
+
+func TestImageReportsNeedVisibilityAndOnlyHide(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	owner := f.person(t, "owner", user.KindMember, user.RoleUser)
+	b := f.person(t, "b", user.KindGuest, user.RoleUser)
+	c := f.person(t, "c", user.KindGuest, user.RoleUser)
+	f.images.byID[5] = media.Media{ID: 5, OwnerID: owner.UserID, Key: "k5"}
+	report := func(who auth.Identity) error {
+		return f.svc.Report(ctx, who, ReportInput{TargetType: TargetMedia, TargetID: 5, Reason: "spam"})
+	}
+
+	// A profile photo nobody was shown cannot be reported by guessing its id.
+	if err := report(b); !errors.Is(err, ErrNotVisible) {
+		t.Fatalf("unseen image: %v", err)
+	}
+	// Once a door opens, the other side sees the photo and may report it.
+	f.users.UpdateCard(ctx, owner.UserID, nil, "", "", ptr(uint64(5)))
+	f.live.doors[[2]uint64{min(owner.UserID, b.UserID), max(owner.UserID, b.UserID)}] = true
+	if err := report(b); err != nil {
+		t.Fatalf("photo revealed through a door: %v", err)
+	}
+	// Posted in the room: anyone may report it.
+	f.msgs.byID[20] = message.NewRoom(20, 1, owner.UserID, "owner", "", 5)
+	if err := report(c); err != nil {
+		t.Fatalf("room image: %v", err)
+	}
+
+	// Two reports reach the threshold: hidden, not deleted.
+	if !f.images.hidden[5] || f.images.removed[5] {
+		t.Fatalf("want hidden and restorable, got hidden=%v removed=%v", f.images.hidden[5], f.images.removed[5])
+	}
+	// Dismissing every report brings it back.
+	mod := f.person(t, "mod", user.KindMember, user.RoleModerator)
+	for _, r := range f.store.reports {
+		if err := f.svc.Dismiss(ctx, mod, r.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if f.images.hidden[5] {
+		t.Fatal("image should be restored once all reports are dismissed")
+	}
+}
+
+func TestDismissRestoresAutoHiddenMessageButNotRemovedOnes(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	a := f.person(t, "a", user.KindGuest, user.RoleUser)
+	b := f.person(t, "b", user.KindGuest, user.RoleUser)
+	c := f.person(t, "c", user.KindGuest, user.RoleUser)
+	mod := f.person(t, "mod", user.KindMember, user.RoleModerator)
+	f.msgs.byID[11] = message.NewRoom(11, 1, a.UserID, "a", "fine actually", 0)
+	f.msgs.byID[12] = message.NewRoom(12, 1, a.UserID, "a", "really bad", 0)
+	for _, who := range []auth.Identity{b, c} {
+		f.svc.Report(ctx, who, ReportInput{TargetType: TargetMessage, TargetID: 11, Reason: "spam"})
+	}
+	if !f.msgs.hidden[11] {
+		t.Fatal("auto-hide expected")
+	}
+	f.svc.Dismiss(ctx, mod, 1)
+	if !f.msgs.hidden[11] {
+		t.Fatal("restored while a report is still open")
+	}
+	f.svc.Dismiss(ctx, mod, 2)
+	if f.msgs.hidden[11] {
+		t.Fatal("all reports dismissed: the message should be back")
+	}
+
+	// A moderator removes 12; a late report on it, once dismissed, must not undo that.
+	if err := f.svc.RemoveMessage(ctx, mod, 12); err != nil {
+		t.Fatal(err)
+	}
+	f.store.reports = append(f.store.reports, Report{ID: 99, TargetType: TargetMessage, TargetID: 12, Status: StatusOpen})
+	f.store.reports = append(f.store.reports, Report{ID: 98, TargetType: TargetMessage, TargetID: 12, Status: StatusActioned})
+	f.svc.Dismiss(ctx, mod, 99)
+	if !f.msgs.hidden[12] {
+		t.Fatal("a moderator's removal must stand")
+	}
+}
+
+func TestContentRemovalFollowsTheRoleLadder(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	admin := f.person(t, "boss", user.KindMember, user.RoleAdmin)
+	mod := f.person(t, "mod1", user.KindMember, user.RoleModerator)
+	b := f.person(t, "b", user.KindGuest, user.RoleUser)
+	c := f.person(t, "c", user.KindGuest, user.RoleUser)
+	f.msgs.byID[30] = message.NewRoom(30, 1, admin.UserID, "boss", "admin note", 0)
+	f.images.byID[6] = media.Media{ID: 6, OwnerID: admin.UserID, Key: "k6"}
+
+	if err := f.svc.RemoveMessage(ctx, mod, 30); !errors.Is(err, ErrOutranked) {
+		t.Fatalf("mod removing the admin's message: %v", err)
+	}
+	if err := f.svc.RemoveMedia(ctx, mod, 6); !errors.Is(err, ErrOutranked) {
+		t.Fatalf("mod removing the admin's image: %v", err)
+	}
+	// Reports on staff content wait for a human: never auto-hidden.
+	for _, who := range []auth.Identity{b, c} {
+		f.svc.Report(ctx, who, ReportInput{TargetType: TargetMessage, TargetID: 30, Reason: "spam"})
+	}
+	if f.msgs.hidden[30] {
+		t.Fatal("staff content must not be auto-hidden")
 	}
 }

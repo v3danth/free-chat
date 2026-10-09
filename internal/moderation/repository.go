@@ -102,7 +102,13 @@ func (r *MySQLRepository) CountOpen(ctx context.Context, t TargetType, targetID 
 
 // ListReports returns reports with status, oldest first (a queue).
 func (r *MySQLRepository) ListReports(ctx context.Context, status Status, limit int) ([]Report, error) {
-	rows, err := r.db.QueryContext(ctx, selectReport+`WHERE status = ? ORDER BY id LIMIT ?`, status, limit)
+	// The open queue is worked oldest first; closed reports are history,
+	// where the latest matter most.
+	order := "id"
+	if status != StatusOpen {
+		order = "id DESC"
+	}
+	rows, err := r.db.QueryContext(ctx, selectReport+`WHERE status = ? ORDER BY `+order+` LIMIT ?`, status, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +137,24 @@ func (r *MySQLRepository) SetReportStatus(ctx context.Context, id uint64, status
 		return ErrReportNotFound
 	}
 	return nil
+}
+
+func (r *MySQLRepository) GetReport(ctx context.Context, id uint64) (Report, error) {
+	rep := Report{ID: id}
+	err := r.db.QueryRowContext(ctx, `SELECT target_type, target_id, status FROM reports WHERE id = ?`, id).
+		Scan(&rep.TargetType, &rep.TargetID, &rep.Status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Report{}, ErrReportNotFound
+	}
+	return rep, err
+}
+
+func (r *MySQLRepository) WasActioned(ctx context.Context, t TargetType, targetID uint64) (bool, error) {
+	var done bool
+	err := r.db.QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM reports WHERE target_type = ? AND target_id = ? AND status = 'actioned')`,
+		t, targetID).Scan(&done)
+	return done, err
 }
 
 // ResolveTarget closes every open report about one target.

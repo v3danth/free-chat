@@ -80,3 +80,28 @@ func TestEnqueueNeverBlocks(t *testing.T) {
 		t.Fatal("a full queue must drop instead of blocking chat")
 	}
 }
+
+// stallInserter hangs any multi-row insert until its deadline, like a lock
+// wait; single rows go through while their own deadline is still ahead.
+type stallInserter struct{ fakeInserter }
+
+func (s *stallInserter) InsertBatch(ctx context.Context, msgs []Message) error {
+	if len(msgs) > 1 {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.fakeInserter.InsertBatch(ctx, msgs)
+}
+
+func TestStalledBatchDoesNotLoseMessages(t *testing.T) {
+	repo := &stallInserter{}
+	w := NewWriter(repo, 10)
+	w.wait = 50 * time.Millisecond
+	w.write([]Message{{ID: 1}, {ID: 2}, {ID: 3}})
+	if got := repo.stored(); len(got) != 3 {
+		t.Fatalf("stored %v, want all 3 after the stalled batch", got)
+	}
+}

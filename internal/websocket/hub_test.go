@@ -119,9 +119,11 @@ func newHarness(t *testing.T) *harness {
 }
 
 type peer struct {
-	t    *testing.T
-	id   uint64
-	conn *gws.Conn
+	t     *testing.T
+	id    uint64
+	conn  *gws.Conn
+	token string
+	url   string
 }
 
 func (h *harness) join(name string) *peer {
@@ -136,9 +138,21 @@ func (h *harness) join(name string) *peer {
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	p := &peer{t: h.t, id: s.User.ID, conn: conn}
+	p := &peer{t: h.t, id: s.User.ID, conn: conn, token: s.Token, url: h.wsURL}
 	p.expect("hello")
 	return p
+}
+
+// reconnect opens a second socket with the same session, as a browser does
+// after a dropped connection, and returns its hello.
+func (p *peer) reconnect() map[string]any {
+	p.t.Helper()
+	conn, _, err := gws.DefaultDialer.Dial(p.url+p.token, nil)
+	if err != nil {
+		p.t.Fatal(err)
+	}
+	p.conn = conn
+	return p.expect("hello")
 }
 
 func (p *peer) send(frame map[string]any) {
@@ -284,5 +298,23 @@ func TestModerationHooks(t *testing.T) {
 	}
 	if ev := asha.expect("presence"); ev["event"] != "leave" {
 		t.Fatalf("kicked user leaves: %v", ev)
+	}
+}
+
+func TestHelloRestoresDoorsAfterReconnect(t *testing.T) {
+	h := newHarness(t)
+	asha := h.join("asha")
+	ravi := h.join("ravi")
+	ravi.send(map[string]any{"type": "dm", "to": asha.id, "content": "hello there"})
+	asha.expect("dm")
+	ravi.expect("dm")
+
+	doors := ravi.reconnect()["doors"].([]any)
+	if len(doors) != 1 {
+		t.Fatalf("doors after reconnect = %v", doors)
+	}
+	d := doors[0].(map[string]any)
+	if uint64(d["with"].(float64)) != asha.id || d["open"] != false || d["knocked_by_me"] != true {
+		t.Fatalf("pending knock not reported: %v", d)
 	}
 }

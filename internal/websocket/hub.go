@@ -3,6 +3,7 @@ package websocket
 import (
 	"context"
 	"log"
+	"math"
 	"slices"
 	"strings"
 	"sync"
@@ -69,6 +70,17 @@ type room struct {
 
 // pair is an unordered pair of users; a door is the private chat between them.
 type pair struct{ lo, hi uint64 }
+
+// other is the second person in p, if id is one of them.
+func (p pair) other(id uint64) (uint64, bool) {
+	switch id {
+	case p.lo:
+		return p.hi, true
+	case p.hi:
+		return p.lo, true
+	}
+	return 0, false
+}
 
 func pairOf(a, b uint64) pair {
 	if a > b {
@@ -148,18 +160,28 @@ func (h *Hub) register(c *Client) {
 	for _, rid := range h.order {
 		rooms = append(rooms, roomView{ID: rid, Name: h.rooms[rid].name})
 	}
+	doors := []doorView{}
+	for p, d := range h.doors {
+		if other, ok := p.other(c.id()); ok {
+			doors = append(doors, doorView{With: other, Open: d.open, KnockedByMe: !d.open && d.knocker == c.id()})
+		}
+	}
 	card := user.ToCard(c.user, c.since)
-	self := user.ToSelf(c.user)
+	// hello goes out before the lock is released, so nothing sent to this
+	// client (a DM, someone else's join) can arrive ahead of it.
+	c.deliver(encode(helloEvent{
+		Type:   "hello",
+		You:    user.ToSelf(c.user),
+		Online: online,
+		Rooms:  rooms,
+		RateLimit: rateLimitView{
+			Remaining: h.Limiter.Remaining(c.id()),
+			ResetIn:   int64(math.Ceil(h.Limiter.ResetIn(c.id()).Seconds())),
+		},
+		Doors: doors,
+	}))
 	h.mu.Unlock()
 
-	cfg := h.Limiter.Config()
-	c.deliver(encode(helloEvent{
-		Type:      "hello",
-		You:       self,
-		Online:    online,
-		Rooms:     rooms,
-		RateLimit: rateLimitView{Remaining: h.Limiter.Remaining(c.id()), ResetIn: int64(cfg.Window.Seconds())},
-	}))
 	h.broadcastPresence(c, presenceFrame("join", c.id(), &card))
 	h.touch(c.id())
 }
@@ -193,6 +215,28 @@ func (h *Hub) OnlineIDs() []uint64 {
 		ids = append(ids, uid)
 	}
 	return ids
+}
+
+// Forget drops room history the database no longer has: messages older
+// than beforeID (retention) and anything sent by the given deleted users.
+func (h *Hub) Forget(beforeID uint64, senders []uint64) {
+	gone := make(map[uint64]bool, len(senders))
+	for _, id := range senders {
+		gone[id] = true
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, r := range h.rooms {
+		r.recent = slices.DeleteFunc(r.recent, func(ev chatEvent) bool { return ev.ID < beforeID || gone[ev.SenderID] })
+	}
+}
+
+// DoorOpen reports whether a and b have an open private chat right now.
+func (h *Hub) DoorOpen(a, b uint64) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	d, ok := h.doors[pairOf(a, b)]
+	return ok && d.open
 }
 
 // Snapshot counts who is connected right now, for the control panel.

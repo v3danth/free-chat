@@ -25,6 +25,10 @@ type handler struct {
 }
 
 func (h handler) upload(w http.ResponseWriter, r *http.Request, id auth.Identity) {
+	if err := h.svc.Admit(id.UserID); err != nil {
+		httpx.Error(w, err)
+		return
+	}
 	raw, err := h.readUpload(w, r)
 	if err != nil {
 		httpx.Error(w, err)

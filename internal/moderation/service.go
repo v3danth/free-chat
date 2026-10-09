@@ -3,6 +3,7 @@ package moderation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -36,6 +37,10 @@ type Store interface {
 	BanIP(ctx context.Context, ipHash []byte, until time.Time, reason string, actor uint64) error
 	CreateReport(ctx context.Context, r Report) error
 	CountOpen(ctx context.Context, t TargetType, targetID uint64) (int, error)
+	// GetReport returns one report, whatever its status.
+	GetReport(ctx context.Context, id uint64) (Report, error)
+	// WasActioned reports whether a moderator ever acted on a target.
+	WasActioned(ctx context.Context, t TargetType, targetID uint64) (bool, error)
 	ListReports(ctx context.Context, status Status, limit int) ([]Report, error)
 	SetReportStatus(ctx context.Context, id uint64, status Status, actor uint64) error
 	ResolveTarget(ctx context.Context, t TargetType, targetID uint64, status Status, actor uint64) error
@@ -55,11 +60,17 @@ type Messages interface {
 	Before(ctx context.Context, m message.Message, n int) ([]message.Message, error)
 	BySender(ctx context.Context, senderID uint64, limit int) ([]message.Message, error)
 	Hide(ctx context.Context, id uint64) error
+	Unhide(ctx context.Context, id uint64) error
+	// MediaSeenBy: the image was in a room message, or in viewer's own DMs.
+	MediaSeenBy(ctx context.Context, mediaID, viewer uint64) (bool, error)
 }
 
 type Images interface {
 	Get(ctx context.Context, id uint64) (media.Media, error)
 	Remove(ctx context.Context, id, actorID uint64, banHash bool) (media.Media, error)
+	// Hide takes an image down but keeps it restorable; Restore undoes it.
+	Hide(ctx context.Context, id uint64) (media.Media, error)
+	Restore(ctx context.Context, id uint64) (bool, error)
 }
 
 // Flusher makes sure queued messages are in MySQL before they are looked up.
@@ -74,6 +85,9 @@ type Live interface {
 	RemoveMessage(m message.Message)
 	RemoveMedia(mediaID uint64)
 	UpdateUser(u user.User)
+	// DoorOpen: a and b have an open private chat, so each sees the
+	// other's profile photo.
+	DoorOpen(a, b uint64) bool
 }
 
 type Deps struct {
@@ -143,7 +157,7 @@ func (s *Service) Report(ctx context.Context, reporter auth.Identity, in ReportI
 	}); err != nil {
 		return err
 	}
-	return s.maybeAutoHide(ctx, in, evidence)
+	return s.maybeAutoHide(ctx, in, evidence, targetUser)
 }
 
 // evidence snapshots the target and returns whose it is. A private message
@@ -175,6 +189,13 @@ func (s *Service) evidence(ctx context.Context, reporter uint64, in ReportInput)
 		if err != nil {
 			return Evidence{}, 0, err
 		}
+		seen, err := s.imageSeenBy(ctx, m, reporter)
+		if err != nil {
+			return Evidence{}, 0, err
+		}
+		if !seen {
+			return Evidence{}, 0, ErrNotVisible
+		}
 		return Evidence{Image: &EvidenceImage{ID: m.ID, OwnerID: m.OwnerID, URL: mediapath.URL(mediapath.Full, m.Key)}}, m.OwnerID, nil
 	default:
 		u, err := s.Users.GetByID(ctx, in.TargetID)
@@ -188,10 +209,35 @@ func (s *Service) evidence(ctx context.Context, reporter uint64, in ReportInput)
 	}
 }
 
+// imageSeenBy decides whether viewer could have seen an image: posted in a
+// room, sent in their own private chats, or the profile photo of someone
+// they have an open door with. Anything else cannot be reported by them.
+func (s *Service) imageSeenBy(ctx context.Context, m media.Media, viewer uint64) (bool, error) {
+	if m.OwnerID == viewer {
+		return true, nil // reporting yourself is refused later, with a clearer error
+	}
+	seen, err := s.Messages.MediaSeenBy(ctx, m.ID, viewer)
+	if err != nil || seen {
+		return seen, err
+	}
+	owner, err := s.Users.GetByID(ctx, m.OwnerID)
+	if errors.Is(err, user.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return owner.PhotoID != nil && *owner.PhotoID == m.ID && s.Live.DoorOpen(viewer, owner.ID), nil
+}
+
 // maybeAutoHide takes reported content down pending review once enough
-// people report it. Users are never auto-actioned; that needs a human.
-func (s *Service) maybeAutoHide(ctx context.Context, in ReportInput, ev Evidence) error {
+// people report it. It hides, never deletes: dismissing the reports brings
+// it back. Users and staff content are never auto-actioned; that needs a human.
+func (s *Service) maybeAutoHide(ctx context.Context, in ReportInput, ev Evidence, author uint64) error {
 	if in.TargetType == TargetUser {
+		return nil
+	}
+	if u, err := s.Users.GetByID(ctx, author); err == nil && u.Role.AtLeast(user.RoleModerator) {
 		return nil
 	}
 	n, err := s.Store.CountOpen(ctx, in.TargetType, in.TargetID)
@@ -204,7 +250,7 @@ func (s *Service) maybeAutoHide(ctx context.Context, in ReportInput, ev Evidence
 		}
 		s.Live.RemoveMessage(toMessage(*ev.Message))
 	} else {
-		if _, err := s.Images.Remove(ctx, in.TargetID, 0, false); err != nil {
+		if _, err := s.Images.Hide(ctx, in.TargetID); err != nil {
 			return err
 		}
 		s.Live.RemoveMedia(in.TargetID)
@@ -225,6 +271,9 @@ func (s *Service) RemoveMessage(ctx context.Context, actor auth.Identity, id uin
 	if err != nil {
 		return err
 	}
+	if err := s.mayActOn(ctx, actor, m.SenderID); err != nil {
+		return err
+	}
 	if err := s.Messages.Hide(ctx, id); err != nil {
 		return err
 	}
@@ -234,6 +283,13 @@ func (s *Service) RemoveMessage(ctx context.Context, actor auth.Identity, id uin
 }
 
 func (s *Service) RemoveMedia(ctx context.Context, actor auth.Identity, id uint64) error {
+	img, err := s.Images.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.mayActOn(ctx, actor, img.OwnerID); err != nil {
+		return err
+	}
 	m, err := s.Images.Remove(ctx, id, actor.UserID, true)
 	if err != nil {
 		return err
@@ -328,10 +384,42 @@ func (s *Service) SetRole(ctx context.Context, actor auth.Identity, userID uint6
 }
 
 func (s *Service) Dismiss(ctx context.Context, actor auth.Identity, reportID uint64) error {
+	r, err := s.Store.GetReport(ctx, reportID)
+	if err != nil {
+		return err
+	}
 	if err := s.Store.SetReportStatus(ctx, reportID, StatusDismissed, actor.UserID); err != nil {
 		return err
 	}
+	if err := s.restoreIfCleared(ctx, r.TargetType, r.TargetID); err != nil {
+		return err
+	}
 	return s.log(ctx, actor, Action{Action: ActDismiss, TargetID: reportID})
+}
+
+// restoreIfCleared brings back content that reports hid, once every report
+// on it is dismissed, unless a moderator ever removed it.
+func (s *Service) restoreIfCleared(ctx context.Context, t TargetType, id uint64) error {
+	if t == TargetUser {
+		return nil
+	}
+	open, err := s.Store.CountOpen(ctx, t, id)
+	if err != nil || open > 0 {
+		return err
+	}
+	actioned, err := s.Store.WasActioned(ctx, t, id)
+	if err != nil || actioned {
+		return err
+	}
+	if t == TargetMessage {
+		err = s.Messages.Unhide(ctx, id)
+	} else {
+		_, err = s.Images.Restore(ctx, id)
+	}
+	if errors.Is(err, message.ErrNotFound) || errors.Is(err, media.ErrNotFound) {
+		return nil // already gone through retention
+	}
+	return err
 }
 
 // ---------------------------------------------------------------------------
@@ -415,6 +503,16 @@ func (s *Service) UserMessages(ctx context.Context, userID uint64, limit int) ([
 
 // target loads the user an action is about and enforces the role ladder:
 // nobody moderates themselves or anyone of equal or higher rank.
+// mayActOn applies the role ladder to content: the actor must outrank its
+// author. Content whose author's account is gone is fair game.
+func (s *Service) mayActOn(ctx context.Context, actor auth.Identity, author uint64) error {
+	_, err := s.target(ctx, actor, author)
+	if errors.Is(err, user.ErrNotFound) {
+		return nil
+	}
+	return err
+}
+
 func (s *Service) target(ctx context.Context, actor auth.Identity, userID uint64) (user.User, error) {
 	if userID == actor.UserID {
 		return user.User{}, ErrSelf

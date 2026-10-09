@@ -18,6 +18,9 @@ const (
 	thumbMax  = 320
 	maxPixels = 40_000_000
 	maxSide   = 12_000
+	// maxDecoded caps the memory one decode may take. Pixels alone are not
+	// enough: a 40 MP 16-bit PNG needs 320 MB but compresses to a few hundred KB.
+	maxDecoded = 160 << 20
 )
 
 // Processed is an upload re-encoded into every served variant. Re-encoding
@@ -43,7 +46,7 @@ func Process(raw []byte) (Processed, error) {
 	// Check the header before decoding: a tiny file can declare a huge
 	// canvas and exhaust memory (a decompression bomb).
 	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > maxSide || cfg.Height > maxSide ||
-		cfg.Width*cfg.Height > maxPixels {
+		cfg.Width*cfg.Height > maxPixels || cfg.Width*cfg.Height*bytesPerPixel(cfg.ColorModel) > maxDecoded {
 		return Processed{}, ErrTooLarge
 	}
 
@@ -68,6 +71,25 @@ func Process(raw []byte) (Processed, error) {
 		*v.out = buf.Bytes()
 	}
 	return p, nil
+}
+
+// bytesPerPixel is what the decoder will allocate per pixel for a colour
+// model, rounded up (JPEG's YCbCr is counted as full 4:4:4).
+func bytesPerPixel(m color.Model) int {
+	switch m {
+	case color.RGBA64Model, color.NRGBA64Model:
+		return 8
+	case color.GrayModel, color.AlphaModel:
+		return 1
+	case color.Gray16Model, color.Alpha16Model:
+		return 2
+	case color.YCbCrModel:
+		return 3
+	}
+	if _, ok := m.(color.Palette); ok {
+		return 1
+	}
+	return 4
 }
 
 // fit scales src so its longest side is at most limit (never upscaling),
