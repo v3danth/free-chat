@@ -131,7 +131,7 @@ draws it. The page at `/faces` is built on these three routes.
 | `hello` | on connect | `you` (Self), `online` (Cards), `rooms` (`[{id, name}]`), `rate_limit` (`{remaining, reset_in_seconds}`: seconds left in the current window), `doors` (`[{with, open, knocked_by_me?}]`: your private chats that are still open or knocking; rebuild chat state from this after a reconnect) |
 | `presence` | someone joins, edits, leaves | `event`: `join` (also a reconnect), `update`, `leave`; `user_id`; `user` (Card, not on leave) |
 | `history` | after `join` | `room_id`, `messages`: up to 20 chat events, **newest first** |
-| `chat` | a room message | `id, room_id, sender_id, name, color, content, image?{url, thumb_url}, ts, filtered?` (`color` is the sender's name colour) |
+| `chat` | a room message | `id, room_id, sender_id, name, color, content, image?{url, thumb_url}, ts, filtered?` (`color` is the sender's name colour when sent; `history` shows each sender's current colour) |
 | `dm` | a private message (also echoed to the sender) | `id, from, to, content, image?, ts, knock?, filtered?` |
 | `door` | a knock was answered | `with`: the other person's Card plus `photo_url` |
 | `removed` | a moderator removed a message | `message_id` |

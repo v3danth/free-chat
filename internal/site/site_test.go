@@ -25,4 +25,11 @@ func TestNameIsFilledInAndEscaped(t *testing.T) {
 			t.Errorf("%s: got %q", path, body)
 		}
 	}
+	for file, page := range map[string]string{"/index.html": "/", "/faces.html": "/faces"} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest("GET", file, nil))
+		if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != page {
+			t.Errorf("%s: %d -> %q, want a redirect to %s", file, rec.Code, rec.Header().Get("Location"), page)
+		}
+	}
 }

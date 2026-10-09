@@ -26,6 +26,9 @@ func NewMemory() *Memory {
 func (m *Memory) Create(_ context.Context, u user.User) (user.User, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if u.Profile.Color == "" {
+		u.Profile.Color = user.DefaultColor
+	}
 	for _, existing := range m.byID {
 		if u.Kind == user.KindMember && existing.Kind == user.KindMember &&
 			strings.EqualFold(u.Profile.Name, existing.Profile.Name) {

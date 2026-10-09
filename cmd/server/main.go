@@ -42,6 +42,7 @@ func main() {
 // adds each, so an out-of-date database is caught at startup.
 var schema = []database.Requirement{
 	{Table: "users", Column: "tags", Migration: "migrations/002_tags.sql"},
+	{Table: "users", Column: "name_color", Migration: "migrations/003_name_color.sql"},
 }
 
 func run() error {

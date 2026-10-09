@@ -160,12 +160,13 @@ func ParseGender(s string) (Gender, error) {
 // background, so any choice stays readable.
 var NameColors = []string{"sky", "rose", "lavender", "orchid", "mint", "lime", "lemon", "peach", "coral", "ice", "stone"}
 
-const defaultColor = "stone"
+// DefaultColor is used when no colour is picked.
+const DefaultColor = "stone"
 
 // ParseColor accepts a NameColors key; empty means the default.
 func ParseColor(s string) (string, error) {
 	if s == "" {
-		return defaultColor, nil
+		return DefaultColor, nil
 	}
 	if !slices.Contains(NameColors, s) {
 		return "", errColor

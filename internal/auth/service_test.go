@@ -229,3 +229,15 @@ func TestLoginAttemptsAreLimited(t *testing.T) {
 		t.Fatalf("other email: %v", err)
 	}
 }
+
+func TestAdminGetsTheDefaultColour(t *testing.T) {
+	svc, repo, _ := newService()
+	ctx := context.Background()
+	if err := svc.EnsureAdmin(ctx, "boss@example.com", "a-good-password", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := repo.GetByEmail(ctx, "boss@example.com")
+	if u.Profile.Color != user.DefaultColor {
+		t.Fatalf("admin colour = %q", u.Profile.Color)
+	}
+}

@@ -60,6 +60,9 @@ func (r *MySQLRepository) Create(ctx context.Context, u User) (User, error) {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	p := u.Profile
+	if p.Color == "" {
+		p.Color = DefaultColor // accounts made in code (the admin) pick no colour
+	}
 	res, err := r.db.ExecContext(ctx, query, u.Kind, u.Role, p.Name, p.Gender, p.Age, tagsJSON(p.Tags), p.Color,
 		p.About, p.Location, nullString(u.Country), u.Email, u.PasswordHash, u.IPHash)
 	switch {

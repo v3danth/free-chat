@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"path/filepath"
+	"strings"
 )
 
 type page struct{ Name string }
@@ -24,6 +25,12 @@ func Routes(mux *http.ServeMux, dir, appName string) error {
 			return fmt.Errorf("render %s: %w", file, err)
 		}
 		body := buf.Bytes()
+		// The file itself would be served raw by the static file server.
+		page := strings.TrimPrefix(pattern, "GET ")
+		if page == "/{$}" {
+			page = "/"
+		}
+		mux.Handle("GET /"+file, http.RedirectHandler(page, http.StatusMovedPermanently))
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-cache")
