@@ -1,249 +1,152 @@
+// Package filter is a pure content filter. A Filter is immutable after New;
+// Live holds the current one so moderators can swap it atomically while
+// messages are being filtered concurrently.
 package filter
 
 import (
 	"strings"
-	"sync"
+	"sync/atomic"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/v3danth/free-chat/internal/text"
 )
 
-type Config struct {
-	MaxMessageLength int
-	BannedWords      []string
+type Action string
+
+const (
+	Mask  Action = "mask"  // replace the word with its first letter and '*'s
+	Block Action = "block" // reject the whole message
+)
+
+type Rule struct {
+	Word   string
+	Action Action
 }
 
-func DefaultConfig() Config {
-	return Config{
-		MaxMessageLength: 1000,
-	}
-}
+const (
+	ViolationTooLong    = "message exceeds maximum length"
+	ViolationProhibited = "contains prohibited content"
+	ViolationBlocked    = "contains blocked content"
+)
 
 type Result struct {
 	Content    string
-	Violations []string
 	Filtered   bool
+	Blocked    bool
+	Violations []string
 }
 
 type Filter struct {
-	maxLength int
-
-	mu          sync.RWMutex
-	bannedWords map[string]struct{}
+	maxLen  int
+	words   map[string]Action // single words
+	phrases []string          // multi-word, always Block, stored " a b "
 }
 
-func NewFilter(cfg Config) *Filter {
+// Normalize is the canonical form of a rule: lower case, runs of anything
+// that is not part of a word collapsed to one space. "Telegram.me" becomes
+// "telegram me", which is a phrase.
+func Normalize(s string) string {
+	return strings.Join(strings.FieldsFunc(strings.ToLower(s), notWord), " ")
+}
 
-	if cfg.MaxMessageLength <= 0 {
-		cfg.MaxMessageLength = DefaultConfig().MaxMessageLength
-	}
-
-	f := &Filter{
-		maxLength: cfg.MaxMessageLength,
-		bannedWords: make(map[string]struct{},
-			len(cfg.BannedWords)),
-	}
-
-	for _, w := range cfg.BannedWords {
-		w = normalize(w)
-
-		if w != "" {
-			f.bannedWords[w] = struct{}{}
+func New(maxLen int, rules []Rule) Filter {
+	f := Filter{maxLen: maxLen, words: make(map[string]Action, len(rules))}
+	for _, r := range rules {
+		w := Normalize(r.Word)
+		switch {
+		case w == "":
+		case strings.Contains(w, " "):
+			f.phrases = append(f.phrases, " "+w+" ")
+		default:
+			f.words[w] = r.Action
 		}
 	}
-
 	return f
 }
 
-func (f *Filter) Check(content string) Result {
+func (f Filter) Apply(content string) Result {
+	var violations []string
 
-	result := Result{
-		Content: content,
+	if utf8.RuneCountInString(content) > f.maxLen {
+		content = text.Truncate(content, f.maxLen)
+		violations = append(violations, ViolationTooLong)
 	}
 
-	if content == "" {
-		return result
-	}
-
-	// Unicode safe length check
-	if utf8.RuneCountInString(content) > f.maxLength {
-
-		content = truncateRunes(
-			content,
-			f.maxLength,
-		)
-
-		result.Content = content
-		result.Filtered = true
-
-		result.Violations =
-			append(result.Violations,
-				"message exceeds maximum length")
-	}
-
-	filtered, changed :=
-		f.filterWords(content)
-
-	if changed {
-
-		result.Content = filtered
-		result.Filtered = true
-
-		result.Violations =
-			append(result.Violations,
-				"contains prohibited content")
-	}
-
-	return result
-}
-
-func (f *Filter) filterWords(content string) (string, bool) {
-
-	var builder strings.Builder
-
-	builder.Grow(len(content))
-
-	changed := false
-
-	for _, word := range strings.FieldsFunc(
-		content,
-		func(r rune) bool {
-			return !unicode.IsLetter(r) &&
-				!unicode.IsNumber(r)
-		},
-	) {
-
-		if f.isBanned(word) {
-
-			changed = true
-
-			continue
-		}
-	}
-
-	// second pass keeps formatting
-	for _, r := range content {
-
-		builder.WriteRune(r)
-	}
-
-	if !changed {
-		return content, false
-	}
-
-	return maskContent(content, f), true
-}
-
-func (f *Filter) isBanned(word string) bool {
-
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-
-	_, ok :=
-		f.bannedWords[normalize(word)]
-
-	return ok
-}
-
-func maskContent(content string, f *Filter) string {
-
-	runes := []rune(content)
-
-	start := 0
-
-	for i, r := range runes {
-
-		if !unicode.IsLetter(r) &&
-			!unicode.IsNumber(r) {
-
-			continue
-		}
-
-		start = i
-
-		for start < len(runes) {
-
-			if !unicode.IsLetter(runes[start]) &&
-				!unicode.IsNumber(runes[start]) {
-				break
-			}
-
-			start++
-		}
-
-		word := string(runes[i:start])
-
-		if f.isBanned(word) {
-
-			for j := i + 1; j < start-1; j++ {
-				runes[j] = '*'
+	if len(f.phrases) > 0 {
+		padded := " " + Normalize(content) + " "
+		for _, p := range f.phrases {
+			if strings.Contains(padded, p) {
+				return Result{Content: content, Filtered: true, Blocked: true, Violations: append(violations, ViolationBlocked)}
 			}
 		}
-
-		i = start
 	}
 
-	return string(runes)
+	masked, hit, blocked := f.scan(content)
+	switch {
+	case blocked:
+		return Result{Content: content, Filtered: true, Blocked: true, Violations: append(violations, ViolationBlocked)}
+	case hit:
+		violations = append(violations, ViolationProhibited)
+	}
+	return Result{Content: masked, Filtered: len(violations) > 0, Violations: violations}
 }
 
-func normalize(s string) string {
+// Screen adapts Apply to user.Screen for profile text.
+func (f Filter) Screen(s string) (string, bool, bool) {
+	r := f.Apply(s)
+	return r.Content, r.Filtered && !r.Blocked, r.Blocked
+}
 
-	var b strings.Builder
-
-	for _, r := range s {
-
-		if unicode.IsLetter(r) ||
-			unicode.IsNumber(r) {
-
-			b.WriteRune(
-				unicode.ToLower(r),
-			)
+// scan masks every Mask word as its first rune plus '*'s (e.g. "f***"),
+// leaving punctuation and spacing untouched, and reports any Block word.
+func (f Filter) scan(s string) (out string, masked, blocked bool) {
+	if len(f.words) == 0 {
+		return s, false, false
+	}
+	runes := []rune(s)
+	for i := 0; i < len(runes); {
+		if notWord(runes[i]) {
+			i++
+			continue
 		}
-	}
-
-	return b.String()
-}
-
-func truncateRunes(
-	s string,
-	n int,
-) string {
-
-	count := 0
-
-	for i, r := range s {
-
-		if count == n {
-			return s[:i]
+		end := i
+		for end < len(runes) && !notWord(runes[end]) {
+			end++
 		}
-
-		_ = r
-		count++
+		switch f.words[strings.ToLower(string(runes[i:end]))] {
+		case Block:
+			return s, false, true
+		case Mask:
+			masked = true
+			for k := i + 1; k < end; k++ {
+				runes[k] = '*'
+			}
+		}
+		i = end
 	}
-
-	return s
-}
-
-func (f *Filter) AddBannedWord(word string) {
-
-	word = normalize(word)
-
-	if word == "" {
-		return
+	if !masked {
+		return s, false, false
 	}
-
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	f.bannedWords[word] = struct{}{}
+	return string(runes), true, false
 }
 
-func (f *Filter) RemoveBannedWord(word string) {
-
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	delete(
-		f.bannedWords,
-		normalize(word),
-	)
+// notWord splits words. Combining marks belong to the word: Hindi vowel
+// signs (matras) are marks, and splitting on them would break every word.
+func notWord(r rune) bool {
+	return !unicode.IsLetter(r) && !unicode.IsMark(r) && !unicode.IsNumber(r)
 }
+
+// Live is the filter in force; Store swaps it for every later Load.
+type Live struct {
+	p atomic.Pointer[Filter]
+}
+
+func NewLive(f Filter) *Live {
+	l := &Live{}
+	l.Store(f)
+	return l
+}
+
+func (l *Live) Load() Filter   { return *l.p.Load() }
+func (l *Live) Store(f Filter) { l.p.Store(&f) }

@@ -2,168 +2,185 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/v3danth/free-chat/internal/auth"
+	"github.com/v3danth/free-chat/internal/avatar"
+	"github.com/v3danth/free-chat/internal/block"
 	"github.com/v3danth/free-chat/internal/config"
 	"github.com/v3danth/free-chat/internal/database"
 	"github.com/v3danth/free-chat/internal/filter"
-	"github.com/v3danth/free-chat/internal/guest"
+	"github.com/v3danth/free-chat/internal/geo"
+	"github.com/v3danth/free-chat/internal/httpx"
+	"github.com/v3danth/free-chat/internal/id"
+	"github.com/v3danth/free-chat/internal/janitor"
 	"github.com/v3danth/free-chat/internal/media"
 	"github.com/v3danth/free-chat/internal/message"
+	"github.com/v3danth/free-chat/internal/moderation"
 	"github.com/v3danth/free-chat/internal/ratelimit"
 	"github.com/v3danth/free-chat/internal/user"
 	"github.com/v3danth/free-chat/internal/websocket"
 )
 
 func main() {
-	// 1. Load configuration
-	cfg := config.Load()
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
 
-	// 2. Connect to database
-	db, err := database.New(cfg)
+// run is the composition root: the only place that knows every package and
+// the only place with process-level side effects.
+func run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("database connection failed: %v", err)
+		return err
+	}
+
+	db, err := database.Open(ctx, database.Config{
+		Host: cfg.MySQLHost, Port: cfg.MySQLPort, User: cfg.MySQLUser,
+		Password: cfg.MySQLPassword, Name: cfg.MySQLDatabase,
+	})
+	if err != nil {
+		return err
 	}
 	defer db.Close()
 
-	// 3. Build repositories
-	userRepo := user.NewRepository(db)
-	msgRepo := message.NewRepository(db)
-	mediaRepo := media.NewRepository(db)
-
-	// 4. Build storage
-	storage, err := media.NewLocalStorage(media.StorageConfig{
-		BasePath: cfg.MediaStoragePath,
-		BaseURL:  "/media",
-	})
+	locator, closeGeo, err := openGeo(cfg.GeoIPPath)
 	if err != nil {
-		log.Fatalf("failed to initialize storage: %v", err)
+		return err
 	}
+	defer closeGeo()
 
-	// 5. Build services
-	authService := auth.NewService(userRepo, cfg.JWTSecret)
-	jwtManager := auth.NewJWTManager(cfg.JWTSecret)
+	// Repositories.
+	users := user.NewRepository(db)
+	messages := message.NewRepository(db)
+	modStore := moderation.NewRepository(db)
+	blocks := block.NewRepository(db)
 
-	mediaService := media.NewService(mediaRepo, storage, media.UploadConfig{
-		MaxImageSize:  cfg.MediaMaxImageSize,
-		MaxGIFSize:    cfg.MediaMaxGIFSize,
-		MaxVoiceSize:  cfg.MediaMaxVoiceSize,
-		FlagThreshold: cfg.MediaFlagThreshold,
-	})
-
-	// 6. Parse banned words
-	bannedWords := parseBannedWords(cfg.FilterBannedWords)
-
-	// 7. Build WebSocket hub
-	hub := websocket.NewHub(
-		userRepo,
-		msgRepo,
-		mediaRepo,
-		storage,
-		cfg.MessageHistoryLimit,
-		ratelimit.Config{
-			Rate:   cfg.MessageRateLimit,
-			Window: cfg.MessageRateWindow,
-		},
-		filter.Config{
-			MaxMessageLength: cfg.MessageMaxLength,
-			BannedWords:      bannedWords,
-		},
-	)
-	go hub.Run()
-
-	// 8. Start guest cleanup goroutine
-	guestCleaner := guest.NewCleaner(userRepo, guest.CleanerConfig{
-		SweepInterval:   cfg.GuestSweepInterval,
-		MaxInactiveTime: cfg.GuestMaxInactiveTime,
-	})
-	go guestCleaner.Start()
-	defer guestCleaner.Stop()
-
-	// 9. Build handlers
-	authHandler := auth.NewHandler(authService)
-	wsHandler := websocket.NewHandler(hub, jwtManager, authService)
-	mediaHandler := media.NewHandler(mediaService, jwtManager, storage)
-
-	// 10. Register routes
-	mux := http.NewServeMux()
-
-	mux.Handle("/", http.FileServer(http.Dir("./web")))
-	// WebSocket
-	mux.HandleFunc("/ws", wsHandler.ServeWS)
-
-	// Auth
-	mux.HandleFunc("/auth/guest", authHandler.CreateGuest)
-	mux.HandleFunc("/auth/register", authHandler.Register)
-	mux.HandleFunc("/auth/login", authHandler.Login)
-
-	// Media upload
-	mux.HandleFunc("/media/upload/image", mediaHandler.UploadImage)
-	mux.HandleFunc("/media/upload/gif", mediaHandler.UploadGIF)
-	mux.HandleFunc("/media/upload/voice", mediaHandler.UploadVoice)
-	mux.HandleFunc("/media/flag", mediaHandler.FlagMedia)
-
-	// Media serving (static files)
-	mux.Handle("/media/files/", http.StripPrefix("/media/files/", http.FileServer(http.Dir(cfg.MediaStoragePath))))
-
-	// 11. Start server with graceful shutdown
-	addr := ":" + cfg.ServerPort
-	server := &http.Server{
-		Addr:         addr,
-		Handler:      mux,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+	storage, err := media.NewStorage(cfg.MediaStoragePath)
+	if err != nil {
+		return err
 	}
+	mediaSvc := media.NewService(media.NewRepository(db), storage)
 
-	// Shutdown channel
-	shutdownCh := make(chan os.Signal, 1)
-	signal.Notify(shutdownCh, syscall.SIGINT, syscall.SIGTERM)
+	words := filter.NewLive(filter.New(cfg.MessageMaxLength, nil))
+	authSvc := auth.NewService(users, auth.NewTokens(cfg.JWTSecret), modStore, locator, words, cfg.JWTSecret)
 
-	// Start server
-	go func() {
-		log.Printf("server running on %s", addr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
-		}
+	// The message log is written in the background; it gets its own context
+	// so it can drain after the HTTP server and sockets are gone.
+	writer := message.NewWriter(messages, 10_000)
+	writerCtx, stopWriter := context.WithCancel(context.Background())
+	go writer.Run(writerCtx)
+	defer func() {
+		stopWriter()
+		<-writer.Done()
 	}()
 
-	// Wait for shutdown signal
-	sig := <-shutdownCh
-	log.Printf("received signal %v, shutting down...", sig)
-
-	// Give outstanding requests 10 seconds to complete
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("shutdown error: %v", err)
+	hub, err := newHub(ctx, cfg, messages, writer, mediaSvc, users, blocks, words)
+	if err != nil {
+		return err
 	}
 
-	log.Println("server stopped")
-}
-
-func parseBannedWords(commaSeparated string) []string {
-	if commaSeparated == "" {
-		return nil
+	modSvc := moderation.NewService(moderation.Deps{
+		Store: modStore, Users: users, Messages: messages, Writer: writer, Images: mediaSvc,
+		Live: hub, Filter: words, MaxLength: cfg.MessageMaxLength, AutoHide: cfg.ReportAutoHideThreshold,
+	})
+	if err := modSvc.ReloadWords(ctx); err != nil {
+		return fmt.Errorf("load banned words: %w", err)
 	}
 
-	words := strings.Split(commaSeparated, ",")
-	result := make([]string, 0, len(words))
-
-	for _, w := range words {
-		w = strings.TrimSpace(w)
-		if w != "" {
-			result = append(result, w)
+	if cfg.AdminEmail != "" {
+		if err := authSvc.EnsureAdmin(ctx, cfg.AdminEmail, cfg.AdminPassword, cfg.AdminName); err != nil {
+			return fmt.Errorf("bootstrap admin: %w", err)
 		}
 	}
 
-	return result
+	ipOf := httpx.NewIPResolver(cfg.BehindProxy)
+	mux := http.NewServeMux()
+	mux.Handle("GET /", http.FileServer(http.Dir("./web")))
+	mux.HandleFunc("GET /faces", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "./web/faces.html") })
+	avatar.Routes(mux)
+	auth.Routes(mux, authSvc, ipOf)
+	media.Routes(mux, mediaSvc, authSvc, ipOf, cfg.MediaMaxUploadSize)
+	websocket.Routes(mux, hub, authSvc, users, ipOf)
+	moderation.Routes(mux, modSvc, authSvc, ipOf)
+
+	go janitor.Run(ctx, janitor.NewMySQLStore(db), mediaSvc, hub, janitor.Config{
+		Retention: cfg.Retention, Interval: cfg.JanitorInterval,
+	})
+
+	server := &http.Server{
+		Addr:              ":" + cfg.ServerPort,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       60 * time.Second, // large uploads on slow links
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	server.RegisterOnShutdown(hub.Close) // hijacked WebSockets are not closed by Shutdown
+
+	serveErr := make(chan error, 1)
+	go func() {
+		log.Printf("server running on %s", server.Addr)
+		serveErr <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serveErr:
+		return err
+	case <-ctx.Done():
+		log.Println("shutting down...")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	log.Println("server stopped")
+	return nil
+}
+
+// newHub loads the live rooms and their recent messages once, so joining a
+// room is served from memory.
+func newHub(ctx context.Context, cfg config.Config, messages *message.MySQLRepository, writer *message.Writer,
+	mediaSvc *media.Service, users *user.MySQLRepository, blocks *block.MySQLRepository, words *filter.Live,
+) (*websocket.Hub, error) {
+	rooms, err := messages.LiveRooms(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load rooms: %w", err)
+	}
+	recent := make(map[uint64][]message.Entry, len(rooms))
+	for _, r := range rooms {
+		if recent[r.ID], err = messages.Recent(ctx, r.ID, cfg.MessageHistoryLimit); err != nil {
+			return nil, fmt.Errorf("load history for room %d: %w", r.ID, err)
+		}
+	}
+	return websocket.NewHub(websocket.Deps{
+		Writer: writer, IDs: &id.Generator{}, Media: mediaSvc, Users: users, Blocks: blocks,
+		Limiter:      ratelimit.New(ratelimit.Config{Rate: cfg.MessageRateLimit, Window: cfg.MessageRateWindow}),
+		Filter:       words,
+		HistoryLimit: cfg.MessageHistoryLimit,
+	}, rooms, recent), nil
+}
+
+func openGeo(path string) (geo.Locator, func(), error) {
+	if path == "" {
+		log.Println("geo: GEOIP_DB_PATH not set, country flags disabled")
+		return geo.None{}, func() {}, nil
+	}
+	db, err := geo.Open(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open geoip database: %w", err)
+	}
+	return db, func() { db.Close() }, nil
 }

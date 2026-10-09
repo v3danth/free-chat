@@ -1,20 +1,53 @@
 package user
 
-import "time"
+import (
+	"regexp"
+	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
 
-type UserType string
-
-const (
-	TypeGuest      UserType = "guest"
-	TypeRegistered UserType = "registered"
+	"github.com/v3danth/free-chat/internal/apperr"
 )
 
-type UserStatus string
+type Kind string
 
 const (
-	StatusActive   UserStatus = "active"
-	StatusInactive UserStatus = "inactive"
+	KindGuest  Kind = "guest"
+	KindMember Kind = "member"
 )
+
+type Role string
+
+const (
+	RoleUser      Role = "user"
+	RoleModerator Role = "moderator"
+	RoleAdmin     Role = "admin"
+)
+
+func (r Role) rank() int {
+	switch r {
+	case RoleAdmin:
+		return 2
+	case RoleModerator:
+		return 1
+	}
+	return 0
+}
+
+// AtLeast reports whether r has min's privileges.
+func (r Role) AtLeast(min Role) bool { return r.rank() >= min.rank() }
+
+// Outranks reports whether r may moderate someone holding other.
+func (r Role) Outranks(other Role) bool { return r.rank() > other.rank() }
+
+func ParseRole(s string) (Role, bool) {
+	switch r := Role(s); r {
+	case RoleUser, RoleModerator, RoleAdmin:
+		return r, true
+	}
+	return "", false
+}
 
 type Gender string
 
@@ -27,25 +60,191 @@ const (
 	GenderCouple    Gender = "couple"
 )
 
+type Intent string
+
+const (
+	IntentTalk          Intent = "talk"
+	IntentFlirt         Intent = "flirt"
+	IntentNightOwl      Intent = "night_owl"
+	IntentVent          Intent = "vent"
+	IntentSomethingReal Intent = "something_real"
+)
+
+// Profile is the public card. A Profile value only exists once ParseProfile
+// has accepted it.
+type Profile struct {
+	Name     string
+	Gender   Gender
+	Age      uint8
+	Intent   Intent
+	About    string
+	Location string
+}
+
 type User struct {
-	ID           uint64
-	UserType     UserType
-	Status       UserStatus
-	Username     string
-	Gender       Gender
-	Age          uint8
-	About        string
+	ID      uint64
+	Kind    Kind
+	Role    Role
+	Profile Profile
+	// Country is set server-side from GeoIP; "" when unknown.
+	Country string
+	PhotoID *uint64
+	// PhotoKey is the file key of PhotoID while that photo is not removed.
+	PhotoKey     *string
 	Email        *string
 	PasswordHash *string
-	LastSeenAt   *time.Time
+	TokenVersion uint32
+	BannedUntil  *time.Time
+	MutedUntil   *time.Time
+	IPHash       []byte
+	LastSeenAt   time.Time
 	CreatedAt    time.Time
-	UpdatedAt    time.Time
 }
 
-func (u *User) IsGuest() bool {
-	return u.UserType == TypeGuest
+func (u User) BannedAt(now time.Time) bool { return u.BannedUntil != nil && now.Before(*u.BannedUntil) }
+
+// Limits mirror the column sizes in migrations/001_schema.sql.
+const (
+	minAge      = 18
+	maxAge      = 99
+	maxName     = 32
+	maxAbout    = 140
+	maxLocation = 40
+)
+
+// Names allow any script's letters and combining marks (Devanagari matras
+// are marks, not letters), digits, underscores and single inner spaces.
+var namePattern = regexp.MustCompile(`^[\p{L}\p{M}\p{N}_]+( [\p{L}\p{M}\p{N}_]+)*$`)
+
+// Locations also allow common punctuation: "Delhi NCR", "St. John's, NL".
+var locationPattern = regexp.MustCompile(`^[\p{L}\p{M}\p{N} .,'()-]*$`)
+
+// reserved stops anyone but staff from looking like staff.
+var reserved = []string{"admin", "moderator", "official", "staff", "support", "system"}
+
+var (
+	errName     = apperr.New(apperr.Invalid, "name must be 2-32 letters or numbers")
+	errReserved = apperr.New(apperr.Invalid, "that name is reserved")
+	errGender   = apperr.New(apperr.Invalid, "gender must be one of male, female, non-binary, femboy, other, couple")
+	errAge      = apperr.New(apperr.Invalid, "you must be 18 or older")
+	errIntent   = apperr.New(apperr.Invalid, "intent must be one of talk, flirt, night_owl, vent, something_real")
+	errAbout    = apperr.New(apperr.Invalid, "about must be at most 140 characters")
+	errLocation = apperr.New(apperr.Invalid, "location must be at most 40 letters")
+)
+
+// ParseName validates a display name; collapses runs of spaces first.
+func ParseName(raw string) (string, error) {
+	name := strings.Join(strings.Fields(raw), " ")
+	if n := utf8.RuneCountInString(name); n < 2 || n > maxName || !namePattern.MatchString(name) {
+		return "", errName
+	}
+	folded := strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, name)
+	for _, word := range reserved {
+		if strings.Contains(folded, word) {
+			return "", errReserved
+		}
+	}
+	return name, nil
 }
 
-func (u *User) IsActive() bool {
-	return u.Status == StatusActive || u.Status == ""
+func ParseGender(s string) (Gender, error) {
+	switch g := Gender(s); g {
+	case GenderMale, GenderFemale, GenderNonBinary, GenderFemboy, GenderOther, GenderCouple:
+		return g, nil
+	}
+	return "", errGender
+}
+
+// ParseIntent defaults to "talk" when empty.
+func ParseIntent(s string) (Intent, error) {
+	switch i := Intent(s); i {
+	case "":
+		return IntentTalk, nil
+	case IntentTalk, IntentFlirt, IntentNightOwl, IntentVent, IntentSomethingReal:
+		return i, nil
+	}
+	return "", errIntent
+}
+
+func ParseAbout(s string) (string, error) {
+	about := strings.TrimSpace(s)
+	if utf8.RuneCountInString(about) > maxAbout {
+		return "", errAbout
+	}
+	return about, nil
+}
+
+func ParseLocation(s string) (string, error) {
+	loc := strings.Join(strings.Fields(s), " ")
+	if utf8.RuneCountInString(loc) > maxLocation || !locationPattern.MatchString(loc) {
+		return "", errLocation
+	}
+	return loc, nil
+}
+
+// Screen checks one piece of user text against the word filter: the
+// cleaned text, whether anything was masked, and whether it must be rejected.
+type Screen func(string) (cleaned string, masked, blocked bool)
+
+var (
+	errNameWords = apperr.New(apperr.Invalid, "that name is not allowed")
+	errTextWords = apperr.New(apperr.Invalid, "your profile contains words that are not allowed")
+)
+
+// Screened applies the word filter to everything others will read. A name
+// is rejected outright if it trips the filter; about and location keep the
+// masked text unless a word is blocked.
+func (p Profile) Screened(screen Screen) (Profile, error) {
+	if _, masked, blocked := screen(p.Name); masked || blocked {
+		return Profile{}, errNameWords
+	}
+	about, _, aboutBlocked := screen(p.About)
+	location, _, locBlocked := screen(p.Location)
+	if aboutBlocked || locBlocked {
+		return Profile{}, errTextWords
+	}
+	p.About, p.Location = about, location
+	return p, nil
+}
+
+// ProfileInput is the untrusted shape every boundary decodes into.
+type ProfileInput struct {
+	Name     string `json:"name"`
+	Gender   string `json:"gender"`
+	Age      int    `json:"age"`
+	Intent   string `json:"intent"`
+	About    string `json:"about"`
+	Location string `json:"location"`
+}
+
+func (in ProfileInput) Parse() (Profile, error) {
+	name, err := ParseName(in.Name)
+	if err != nil {
+		return Profile{}, err
+	}
+	gender, err := ParseGender(in.Gender)
+	if err != nil {
+		return Profile{}, err
+	}
+	if in.Age < minAge || in.Age > maxAge {
+		return Profile{}, errAge
+	}
+	intent, err := ParseIntent(in.Intent)
+	if err != nil {
+		return Profile{}, err
+	}
+	about, err := ParseAbout(in.About)
+	if err != nil {
+		return Profile{}, err
+	}
+	location, err := ParseLocation(in.Location)
+	if err != nil {
+		return Profile{}, err
+	}
+	return Profile{Name: name, Gender: gender, Age: uint8(in.Age), Intent: intent, About: about, Location: location}, nil
 }

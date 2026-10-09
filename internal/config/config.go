@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -10,8 +12,9 @@ import (
 )
 
 type Config struct {
-	AppEnv     string
 	ServerPort string
+	// BehindProxy trusts X-Forwarded-For; enable only behind your own proxy.
+	BehindProxy bool
 
 	MySQLHost     string
 	MySQLPort     string
@@ -21,146 +24,118 @@ type Config struct {
 
 	JWTSecret string
 
-	// Guest settings
-	GuestSweepInterval   time.Duration
-	GuestMaxInactiveTime time.Duration
+	// Optional: when both are set, this member is created or promoted to
+	// admin at startup.
+	AdminEmail    string
+	AdminPassword string
+	AdminName     string
 
-	// Message settings
+	// GeoIPPath is a MaxMind-format country database; empty disables flags.
+	GeoIPPath string
+
+	// Retention bounds how long messages and offline guests are kept.
+	Retention       time.Duration
+	JanitorInterval time.Duration
+
 	MessageHistoryLimit int
 	MessageMaxLength    int
 	MessageRateLimit    int
 	MessageRateWindow   time.Duration
 
-	// Media settings
 	MediaStoragePath   string
-	MediaMaxImageSize  int64
-	MediaMaxGIFSize    int64
-	MediaMaxVoiceSize  int64
-	MediaFlagThreshold uint
+	MediaMaxUploadSize int64
 
-	// Filter settings
-	FilterBannedWords string // comma-separated
+	ReportAutoHideThreshold int
 }
 
-func Load() *Config {
+// Load reads the environment once. Every missing or malformed variable is
+// reported together, so the process either starts with a fully known
+// configuration or not at all.
+func Load() (Config, error) {
 	if err := godotenv.Load(); err != nil {
-		log.Println("warning: .env file not found")
+		log.Println("config: .env file not found, using process environment")
 	}
 
-	cfg := &Config{
-		AppEnv:     getEnv("APP_ENV"),
-		ServerPort: getEnv("SERVER_PORT"),
+	e := &env{}
+	cfg := Config{
+		ServerPort:  e.required("SERVER_PORT"),
+		BehindProxy: get(e, "BEHIND_PROXY", false, strconv.ParseBool),
 
-		MySQLHost:     getEnv("MYSQL_HOST"),
-		MySQLPort:     getEnv("MYSQL_PORT"),
-		MySQLUser:     getEnv("MYSQL_USER"),
-		MySQLPassword: getEnv("MYSQL_PASSWORD"),
-		MySQLDatabase: getEnv("MYSQL_DATABASE"),
+		MySQLHost:     e.required("MYSQL_HOST"),
+		MySQLPort:     e.required("MYSQL_PORT"),
+		MySQLUser:     e.required("MYSQL_USER"),
+		MySQLPassword: e.required("MYSQL_PASSWORD"),
+		MySQLDatabase: e.required("MYSQL_DATABASE"),
 
-		JWTSecret: getEnv("JWT_SECRET"),
+		JWTSecret: e.required("JWT_SECRET"),
 
-		GuestSweepInterval:   getDurationEnv("GUEST_SWEEP_INTERVAL", 1*time.Minute),
-		GuestMaxInactiveTime: getDurationEnv("GUEST_MAX_INACTIVE_TIME", 5*time.Minute),
+		AdminEmail:    os.Getenv("ADMIN_EMAIL"),
+		AdminPassword: os.Getenv("ADMIN_PASSWORD"),
+		AdminName:     get(e, "ADMIN_NAME", "admin", text),
 
-		MessageHistoryLimit: getIntEnv("MESSAGE_HISTORY_LIMIT", 50),
-		MessageMaxLength:    getIntEnv("MESSAGE_MAX_LENGTH", 1000),
-		MessageRateLimit:    getIntEnv("MESSAGE_RATE_LIMIT", 30),
-		MessageRateWindow:   getDurationEnv("MESSAGE_RATE_WINDOW", 60*time.Second),
+		GeoIPPath: os.Getenv("GEOIP_DB_PATH"),
 
-		MediaStoragePath:   getEnvWithDefault("MEDIA_STORAGE_PATH", "./uploads"),
-		MediaMaxImageSize:  getInt64Env("MEDIA_MAX_IMAGE_SIZE", 10*1024*1024),
-		MediaMaxGIFSize:    getInt64Env("MEDIA_MAX_GIF_SIZE", 15*1024*1024),
-		MediaMaxVoiceSize:  getInt64Env("MEDIA_MAX_VOICE_SIZE", 5*1024*1024),
-		MediaFlagThreshold: uint(getIntEnv("MEDIA_FLAG_THRESHOLD", 3)),
+		Retention:       get(e, "DATA_RETENTION", 7*24*time.Hour, seconds),
+		JanitorInterval: get(e, "JANITOR_INTERVAL", 10*time.Minute, seconds),
 
-		FilterBannedWords: getEnvWithDefault("FILTER_BANNED_WORDS", ""),
+		MessageHistoryLimit: get(e, "MESSAGE_HISTORY_LIMIT", 20, strconv.Atoi),
+		MessageMaxLength:    get(e, "MESSAGE_MAX_LENGTH", 1000, strconv.Atoi),
+		MessageRateLimit:    get(e, "MESSAGE_RATE_LIMIT", 30, strconv.Atoi),
+		MessageRateWindow:   get(e, "MESSAGE_RATE_WINDOW", 60*time.Second, seconds),
+
+		MediaStoragePath:   get(e, "MEDIA_STORAGE_PATH", "./uploads", text),
+		MediaMaxUploadSize: get(e, "MEDIA_MAX_UPLOAD_SIZE", int64(10<<20), int64s),
+
+		ReportAutoHideThreshold: get(e, "REPORT_AUTOHIDE_THRESHOLD", 3, strconv.Atoi),
 	}
 
-	return cfg
+	// Bounds that the schema or the product depend on.
+	e.check(cfg.JWTSecret == "" || len(cfg.JWTSecret) >= 32, "JWT_SECRET must be at least 32 characters")
+	e.check(cfg.MessageMaxLength >= 1 && cfg.MessageMaxLength <= 1000, "MESSAGE_MAX_LENGTH must be 1-1000 (messages.body is VARCHAR(1000))")
+	e.check(cfg.MessageHistoryLimit >= 0 && cfg.MessageHistoryLimit <= 50, "MESSAGE_HISTORY_LIMIT must be 0-50")
+	e.check(cfg.MessageRateLimit > 0 && cfg.MessageRateWindow > 0, "MESSAGE_RATE_LIMIT and MESSAGE_RATE_WINDOW must be positive")
+	e.check(cfg.Retention >= time.Hour, "DATA_RETENTION must be at least 3600 seconds")
+	e.check(cfg.JanitorInterval > 0, "JANITOR_INTERVAL must be positive")
+	e.check(cfg.ReportAutoHideThreshold > 0, "REPORT_AUTOHIDE_THRESHOLD must be positive")
+	e.check((cfg.AdminEmail == "") == (cfg.AdminPassword == ""), "set both ADMIN_EMAIL and ADMIN_PASSWORD, or neither")
+
+	return cfg, errors.Join(e.errs...)
 }
 
-func LoadTestConfig() *Config {
-	return &Config{
-		AppEnv:               "test",
-		MySQLHost:            "localhost",
-		MySQLPort:            "3306",
-		MySQLUser:            "root",
-		MySQLPassword:        "passwd",
-		MySQLDatabase:        "chat_db_test",
-		ServerPort:           "8080",
-		JWTSecret:            "test-secret",
-		GuestSweepInterval:   1 * time.Minute,
-		GuestMaxInactiveTime: 5 * time.Minute,
-		MessageHistoryLimit:  50,
-		MessageMaxLength:     1000,
-		MessageRateLimit:     30,
-		MessageRateWindow:    60 * time.Second,
-		MediaStoragePath:     "/tmp/test-uploads",
-		MediaMaxImageSize:    10 * 1024 * 1024,
-		MediaMaxGIFSize:      15 * 1024 * 1024,
-		MediaMaxVoiceSize:    5 * 1024 * 1024,
-		MediaFlagThreshold:   3,
-		FilterBannedWords:    "",
+type env struct{ errs []error }
+
+func (e *env) required(key string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		e.errs = append(e.errs, fmt.Errorf("missing required env variable %s", key))
+	}
+	return v
+}
+
+func (e *env) check(ok bool, msg string) {
+	if !ok {
+		e.errs = append(e.errs, errors.New(msg))
 	}
 }
 
-func getEnv(key string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		log.Fatalf("missing required env variable: %s", key)
+func get[T any](e *env, key string, def T, parse func(string) (T, error)) T {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return def
 	}
-	return value
-}
-
-func getEnvWithDefault(key, defaultVal string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultVal
-	}
-	return value
-}
-
-func getDurationEnv(key string, defaultVal time.Duration) time.Duration {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultVal
-	}
-
-	seconds, err := strconv.Atoi(value)
+	v, err := parse(raw)
 	if err != nil {
-		log.Printf("invalid duration %s=%s, using default %v", key, value, defaultVal)
-		return defaultVal
+		e.errs = append(e.errs, fmt.Errorf("invalid %s=%q: %w", key, raw, err))
 	}
-
-	return time.Duration(seconds) * time.Second
+	return v
 }
 
-func getIntEnv(key string, defaultVal int) int {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultVal
-	}
+func text(s string) (string, error) { return s, nil }
 
-	result, err := strconv.Atoi(value)
-	if err != nil {
-		log.Printf("invalid int %s=%s, using default %d", key, value, defaultVal)
-		return defaultVal
-	}
+func int64s(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
 
-	return result
-}
-
-func getInt64Env(key string, defaultVal int64) int64 {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultVal
-	}
-
-	result, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		log.Printf("invalid int64 %s=%s, using default %d", key, value, defaultVal)
-		return defaultVal
-	}
-
-	return result
+// seconds keeps the existing env format: durations are whole seconds.
+func seconds(s string) (time.Duration, error) {
+	n, err := strconv.Atoi(s)
+	return time.Duration(n) * time.Second, err
 }

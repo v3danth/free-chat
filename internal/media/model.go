@@ -1,93 +1,42 @@
 package media
 
-import "time"
+import (
+	"time"
 
-type MediaType string
-
-const (
-	MediaTypeImage MediaType = "image"
-	MediaTypeGIF   MediaType = "gif"
-	MediaTypeVoice MediaType = "voice"
-)
-
-type FlagReason string
-
-const (
-	FlagReasonInappropriate FlagReason = "inappropriate"
-	FlagReasonSpam          FlagReason = "spam"
-	FlagReasonNudity        FlagReason = "nudity"
-	FlagReasonViolence      FlagReason = "violence"
-	FlagReasonCopyright     FlagReason = "copyright"
-	FlagReasonOther         FlagReason = "other"
+	"github.com/v3danth/free-chat/internal/apperr"
+	"github.com/v3danth/free-chat/internal/mediapath"
 )
 
 type Media struct {
-	ID         uint64
-	UserID     uint64
-	MediaType  MediaType
-	FileName   string
-	FilePath   string
-	FileSize   uint64
-	MimeType   string
-	Width      *uint
-	Height     *uint
-	DurationMs *uint
-	FlagCount  uint
-	IsFlagged  bool
-	CreatedAt  time.Time
+	ID        uint64
+	OwnerID   uint64
+	Key       string
+	SHA256    []byte
+	Width     int
+	Height    int
+	Bytes     int
+	RemovedAt *time.Time
+	CreatedAt time.Time
 }
 
-type Flag struct {
-	ID         uint64
-	MediaID    uint64
-	ReporterID uint64
-	Reason     FlagReason
-	CreatedAt  time.Time
+// Attachment is an image cleared for sharing in chat.
+type Attachment struct {
+	ID    uint64
+	Full  string
+	Thumb string
 }
 
-func (m *Media) URL() string {
-	return "/media/" + m.FilePath
+func AttachmentOf(id uint64, key string) Attachment {
+	return Attachment{ID: id, Full: mediapath.URL(mediapath.Full, key), Thumb: mediapath.URL(mediapath.Thumb, key)}
 }
 
-func (m *Media) IsImage() bool {
-	return m.MediaType == MediaTypeImage || m.MediaType == MediaTypeGIF
-}
-
-func (m *Media) IsVoice() bool {
-	return m.MediaType == MediaTypeVoice
-}
-
-type UploadConfig struct {
-	MaxImageSize     int64
-	MaxGIFSize       int64
-	MaxVoiceSize     int64
-	MaxVoiceSeconds  int
-	AllowedImageMIME []string
-	AllowedGIFMIME   []string
-	AllowedVoiceMIME []string
-	FlagThreshold    uint
-}
-
-func DefaultUploadConfig() UploadConfig {
-	return UploadConfig{
-		MaxImageSize:    10 * 1024 * 1024, // 10MB
-		MaxGIFSize:      15 * 1024 * 1024, // 15MB
-		MaxVoiceSize:    5 * 1024 * 1024,  // 5MB
-		MaxVoiceSeconds: 120,
-		AllowedImageMIME: []string{
-			"image/jpeg",
-			"image/png",
-			"image/webp",
-		},
-		AllowedGIFMIME: []string{
-			"image/gif",
-		},
-		AllowedVoiceMIME: []string{
-			"audio/webm",
-			"audio/ogg",
-			"audio/mp4",
-			"audio/mpeg",
-		},
-		FlagThreshold: 3,
-	}
-}
+var (
+	ErrNotFound    = apperr.New(apperr.NotFound, "image not found")
+	ErrTooLarge    = apperr.New(apperr.TooLarge, "image is too large")
+	ErrInvalidType = apperr.New(apperr.Unsupported, "only JPEG, PNG, GIF and WebP images are allowed")
+	ErrBannedImage = apperr.New(apperr.Forbidden, "this image is not allowed")
+	ErrNotOwner    = apperr.New(apperr.Forbidden, "you can only share images you uploaded")
+	ErrRemoved     = apperr.New(apperr.Forbidden, "this image was removed")
+	ErrMissingFile = apperr.New(apperr.Invalid, "an image file is required")
+	ErrUploadRate  = apperr.New(apperr.RateLimited, "too many uploads, try again in a few minutes")
+)

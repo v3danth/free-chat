@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Find your face - Free Online Chat India</title>
+<meta name="description" content="Type any name and see the pixel animal it draws. Same name, same face, every time. Then walk into the chat room as it.">
+<meta name="theme-color" content="#0E0F13">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/faces.css">
+</head>
+<body>
+<div class="faces-page">
+  <header class="topbar">
+    <a class="brand" href="/">FreeOnlineChat<b>India</b></a>
+    <div class="right"><a class="btn sm primary" href="/" id="enter-top">Enter the room</a></div>
+  </header>
+
+  <main class="faces">
+    <section class="hero-faces">
+      <div class="hero-copy">
+        <h1>Your name is <em>your face.</em></h1>
+        <p class="lede">Type any name. The same name always draws the same pixel animal, on every phone and laptop. Change one letter and you get someone new.</p>
+        <label class="field name-field" for="name">
+          <span>Name</span>
+          <input class="input" id="name" maxlength="32" autocomplete="off" spellcheck="false" value="sleepy_bean">
+        </label>
+        <dl class="specs" id="specs" aria-live="polite"></dl>
+      </div>
+
+      <div class="big-card">
+        <div class="frame" id="frame"><img id="big" alt="" width="288" height="288"></div>
+        <div class="big-name" id="big-name"></div>
+        <span class="tier" id="big-tier"></span>
+        <div class="big-actions">
+          <a class="btn primary" id="enter-as" href="/">Enter as this name</a>
+          <a class="btn" id="save" href="#" download>Save image</a>
+          <button class="btn ghost" id="copy" type="button">Copy link</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <div>
+          <h2>Who might be in the room</h2>
+          <p>Every face is drawn from its name alone. Tap one to look closer.</p>
+        </div>
+        <button class="btn outline" id="shuffle" type="button">New names</button>
+      </div>
+      <div class="wall" id="wall"></div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <div>
+          <h2>Rarity</h2>
+          <p>Rarity comes from the name too, so a legendary name is legendary for anyone who types it.</p>
+        </div>
+      </div>
+      <div class="tiers" id="tiers"></div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <div>
+          <h2>The rules each animal follows</h2>
+          <p>Every feature is picked inside its animal's limits, so a frog never gets cat ears and a bunny never wears a cap over its ears.</p>
+        </div>
+      </div>
+      <div class="table-wrap"><table id="rules"></table></div>
+    </section>
+  </main>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<script src="/faces.js" type="module"></script>
+</body>
+</html>

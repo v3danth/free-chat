@@ -3,231 +3,76 @@ package media
 import (
 	"context"
 	"database/sql"
+	"errors"
+
+	"github.com/v3danth/free-chat/internal/database"
 )
 
 type Repository interface {
-	CreateMedia(ctx context.Context, m *Media) error
-	GetMediaByID(ctx context.Context, id uint64) (*Media, error)
-	GetMediaByUser(ctx context.Context, userID uint64, limit int) ([]*Media, error)
-	DeleteMedia(ctx context.Context, id uint64) error
-	IncrementFlagCount(ctx context.Context, id uint64) error
-	SetFlagged(ctx context.Context, id uint64, flagged bool) error
-
-	CreateFlag(ctx context.Context, flag *Flag) error
-	GetFlagByMediaAndReporter(ctx context.Context, mediaID, reporterID uint64) (*Flag, error)
-	HasUserFlagged(ctx context.Context, mediaID, reporterID uint64) (bool, error)
+	Create(ctx context.Context, m Media) (Media, error)
+	GetByID(ctx context.Context, id uint64) (Media, error)
+	// MarkRemoved soft-deletes the row and returns it as it was.
+	MarkRemoved(ctx context.Context, id uint64) (Media, error)
+	BanHash(ctx context.Context, sha []byte, actorID uint64) error
+	IsHashBanned(ctx context.Context, sha []byte) (bool, error)
 }
 
 type MySQLRepository struct {
 	db *sql.DB
 }
 
-func NewRepository(db *sql.DB) Repository {
+func NewRepository(db *sql.DB) *MySQLRepository {
 	return &MySQLRepository{db: db}
 }
 
-func (r *MySQLRepository) CreateMedia(ctx context.Context, m *Media) error {
-	const query = `
-        INSERT INTO media (
-            user_id, media_type, file_name, file_path, file_size,
-            mime_type, width, height, duration_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `
+func (r *MySQLRepository) Create(ctx context.Context, m Media) (Media, error) {
+	res, err := r.db.ExecContext(ctx, `
+		INSERT INTO media (owner_id, file_key, sha256, width, height, bytes)
+		VALUES (?, ?, ?, ?, ?, ?)`, m.OwnerID, m.Key, m.SHA256, m.Width, m.Height, m.Bytes)
+	if err != nil {
+		return Media{}, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Media{}, err
+	}
+	return r.GetByID(ctx, uint64(id))
+}
 
-	result, err := r.db.ExecContext(
-		ctx,
-		query,
-		m.UserID,
-		m.MediaType,
-		m.FileName,
-		m.FilePath,
-		m.FileSize,
-		m.MimeType,
-		m.Width,
-		m.Height,
-		m.DurationMs,
+func (r *MySQLRepository) GetByID(ctx context.Context, id uint64) (Media, error) {
+	var (
+		m       Media
+		removed sql.NullTime
 	)
-	if err != nil {
-		return err
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, owner_id, file_key, sha256, width, height, bytes, removed_at, created_at
+		FROM media WHERE id = ?`, id).Scan(
+		&m.ID, &m.OwnerID, &m.Key, &m.SHA256, &m.Width, &m.Height, &m.Bytes, &removed, &m.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Media{}, ErrNotFound
 	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return err
-	}
-
-	m.ID = uint64(id)
-	return nil
+	m.RemovedAt = database.TimePtr(removed)
+	return m, err
 }
 
-func (r *MySQLRepository) GetMediaByID(ctx context.Context, id uint64) (*Media, error) {
-	const query = `
-        SELECT id, user_id, media_type, file_name, file_path, file_size,
-               mime_type, width, height, duration_ms, flag_count, is_flagged, created_at
-        FROM media
-        WHERE id = ?
-    `
-
-	var m Media
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&m.ID,
-		&m.UserID,
-		&m.MediaType,
-		&m.FileName,
-		&m.FilePath,
-		&m.FileSize,
-		&m.MimeType,
-		&m.Width,
-		&m.Height,
-		&m.DurationMs,
-		&m.FlagCount,
-		&m.IsFlagged,
-		&m.CreatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
+func (r *MySQLRepository) MarkRemoved(ctx context.Context, id uint64) (Media, error) {
+	m, err := r.GetByID(ctx, id)
 	if err != nil {
-		return nil, err
+		return Media{}, err
 	}
-
-	return &m, nil
+	_, err = r.db.ExecContext(ctx, `UPDATE media SET removed_at = NOW() WHERE id = ? AND removed_at IS NULL`, id)
+	return m, err
 }
 
-func (r *MySQLRepository) GetMediaByUser(
-	ctx context.Context,
-	userID uint64,
-	limit int,
-) ([]*Media, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
-
-	const query = `
-        SELECT id, user_id, media_type, file_name, file_path, file_size,
-               mime_type, width, height, duration_ms, flag_count, is_flagged, created_at
-        FROM media
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-        LIMIT ?
-    `
-
-	rows, err := r.db.QueryContext(ctx, query, userID, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var media []*Media
-	for rows.Next() {
-		var m Media
-		if err := rows.Scan(
-			&m.ID,
-			&m.UserID,
-			&m.MediaType,
-			&m.FileName,
-			&m.FilePath,
-			&m.FileSize,
-			&m.MimeType,
-			&m.Width,
-			&m.Height,
-			&m.DurationMs,
-			&m.FlagCount,
-			&m.IsFlagged,
-			&m.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		media = append(media, &m)
-	}
-
-	return media, rows.Err()
-}
-
-func (r *MySQLRepository) DeleteMedia(ctx context.Context, id uint64) error {
-	const query = `DELETE FROM media WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, id)
+func (r *MySQLRepository) BanHash(ctx context.Context, sha []byte, actorID uint64) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO banned_media_hashes (sha256, created_by) VALUES (?, NULLIF(?, 0))
+		ON DUPLICATE KEY UPDATE sha256 = sha256`, sha, actorID)
 	return err
 }
 
-func (r *MySQLRepository) IncrementFlagCount(ctx context.Context, id uint64) error {
-	const query = `UPDATE media SET flag_count = flag_count + 1 WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, id)
-	return err
-}
-
-func (r *MySQLRepository) SetFlagged(ctx context.Context, id uint64, flagged bool) error {
-	const query = `UPDATE media SET is_flagged = ? WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, flagged, id)
-	return err
-}
-
-func (r *MySQLRepository) CreateFlag(ctx context.Context, flag *Flag) error {
-	const query = `
-        INSERT INTO media_flags (media_id, reporter_id, reason)
-        VALUES (?, ?, ?)
-    `
-
-	result, err := r.db.ExecContext(ctx, query, flag.MediaID, flag.ReporterID, flag.Reason)
-	if err != nil {
-		return err
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return err
-	}
-
-	flag.ID = uint64(id)
-	return nil
-}
-
-func (r *MySQLRepository) GetFlagByMediaAndReporter(
-	ctx context.Context,
-	mediaID,
-	reporterID uint64,
-) (*Flag, error) {
-	const query = `
-        SELECT id, media_id, reporter_id, reason, created_at
-        FROM media_flags
-        WHERE media_id = ? AND reporter_id = ?
-    `
-
-	var flag Flag
-	err := r.db.QueryRowContext(ctx, query, mediaID, reporterID).Scan(
-		&flag.ID,
-		&flag.MediaID,
-		&flag.ReporterID,
-		&flag.Reason,
-		&flag.CreatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return &flag, nil
-}
-
-func (r *MySQLRepository) HasUserFlagged(
-	ctx context.Context,
-	mediaID,
-	reporterID uint64,
-) (bool, error) {
-	const query = `
-        SELECT COUNT(*) FROM media_flags
-        WHERE media_id = ? AND reporter_id = ?
-    `
-
-	var count int
-	err := r.db.QueryRowContext(ctx, query, mediaID, reporterID).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-
-	return count > 0, nil
+func (r *MySQLRepository) IsHashBanned(ctx context.Context, sha []byte) (bool, error) {
+	var banned bool
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM banned_media_hashes WHERE sha256 = ?)`, sha).Scan(&banned)
+	return banned, err
 }

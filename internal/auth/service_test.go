@@ -2,145 +2,183 @@ package auth_test
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/v3danth/free-chat/internal/auth"
+	"github.com/v3danth/free-chat/internal/filter"
+	"github.com/v3danth/free-chat/internal/httpx"
 	"github.com/v3danth/free-chat/internal/user"
+	"github.com/v3danth/free-chat/internal/user/usertest"
 )
 
-type fakeUserRepo struct {
-	users  map[string]*user.User
-	byID   map[uint64]*user.User
-	nextID uint64
+const secret = "test-secret-test-secret-test-secret"
+
+type fakeIPBans map[string]bool
+
+func (f fakeIPBans) IsIPBanned(_ context.Context, h []byte) (bool, error) { return f[string(h)], nil }
+
+type fakeGeo map[string]string
+
+func (f fakeGeo) Country(ip string) string { return f[ip] }
+
+func newService() (*auth.Service, *usertest.Memory, fakeIPBans) {
+	repo := usertest.NewMemory()
+	bans := fakeIPBans{}
+	words := filter.NewLive(filter.New(1000, []filter.Rule{{Word: "scam", Action: filter.Block}}))
+	return auth.NewService(repo, auth.NewTokens(secret), bans, fakeGeo{"203.0.113.9": "IN"}, words, secret), repo, bans
 }
 
-func newFakeRepo() *fakeUserRepo {
-	return &fakeUserRepo{
-		users:  make(map[string]*user.User),
-		byID:   make(map[uint64]*user.User),
-		nextID: 1,
+var home = auth.Origin{IP: "203.0.113.9"}
+
+func profile(name string) user.Profile {
+	return user.Profile{Name: name, Gender: user.GenderOther, Age: 21, Intent: user.IntentTalk}
+}
+
+func TestGuestJoinsWithCountryAndResumes(t *testing.T) {
+	svc, _, _ := newService()
+	ctx := context.Background()
+
+	s, err := svc.CreateGuest(ctx, auth.GuestSignup{Profile: profile("ravi"), Origin: home})
+	if err != nil {
+		t.Fatalf("CreateGuest: %v", err)
+	}
+	if s.User.Country != "IN" || s.User.Kind != user.KindGuest {
+		t.Fatalf("unexpected user: %+v", s.User)
+	}
+	u, err := svc.Resume(ctx, s.Token, home)
+	if err != nil || u.ID != s.User.ID {
+		t.Fatalf("Resume: %+v, %v", u, err)
 	}
 }
 
-func (f *fakeUserRepo) Create(ctx context.Context, u *user.User) error {
-	u.ID = f.nextID
-	f.nextID++
-	u.Status = user.StatusActive
-	f.users[u.Username] = u
-	f.byID[u.ID] = u
-	return nil
-}
-
-func (f *fakeUserRepo) GetByUsername(ctx context.Context, username string) (*user.User, error) {
-	return f.users[username], nil
-}
-
-func (f *fakeUserRepo) GetByEmail(ctx context.Context, email string) (*user.User, error) {
-	for _, u := range f.users {
-		if u.Email != nil && *u.Email == email {
-			return u, nil
+func TestGuestNamesAreNotUnique(t *testing.T) {
+	svc, _, _ := newService()
+	ctx := context.Background()
+	for range 2 {
+		if _, err := svc.CreateGuest(ctx, auth.GuestSignup{Profile: profile("same"), Origin: home}); err != nil {
+			t.Fatalf("guests may share a name: %v", err)
 		}
 	}
-	return nil, nil
 }
 
-func (f *fakeUserRepo) GetByID(ctx context.Context, id uint64) (*user.User, error) {
-	return f.byID[id], nil
+func TestBannedProfileWordsRejected(t *testing.T) {
+	svc, _, _ := newService()
+	p := profile("ravi")
+	p.About = "total scam"
+	if _, err := svc.CreateGuest(context.Background(), auth.GuestSignup{Profile: p, Origin: home}); err == nil {
+		t.Fatal("blocked word in about must be rejected")
+	}
 }
 
-func (f *fakeUserRepo) IsGuestUsernameAvailable(ctx context.Context, username string) (bool, error) {
-	for _, u := range f.users {
-		if u.Username == username && u.Status == user.StatusActive {
-			if u.UserType == user.TypeGuest {
-				return false, nil
-			}
-			if u.UserType == user.TypeRegistered {
-				return false, nil
-			}
+func TestRegisterAndLogin(t *testing.T) {
+	svc, _, _ := newService()
+	ctx := context.Background()
+	reg := auth.Registration{Profile: profile("alice"), Email: "a@example.com", Password: "hunter22!", Origin: home}
+
+	if _, err := svc.Register(ctx, reg); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if _, err := svc.Register(ctx, auth.Registration{Profile: profile("ALICE"), Email: "b@example.com", Password: "hunter22!", Origin: home}); !errors.Is(err, user.ErrNameTaken) {
+		t.Fatalf("member names are unique: %v", err)
+	}
+	if _, err := svc.Login(ctx, auth.Credentials{Email: reg.Email, Password: reg.Password, Origin: home}); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	for _, c := range []auth.Credentials{
+		{Email: reg.Email, Password: "wrong-pass", Origin: home},
+		{Email: "nobody@example.com", Password: reg.Password, Origin: home},
+	} {
+		if _, err := svc.Login(ctx, c); !errors.Is(err, auth.ErrInvalidCredentials) {
+			t.Fatalf("Login(%s): want ErrInvalidCredentials, got %v", c.Email, err)
 		}
 	}
-	return true, nil
 }
 
-func (f *fakeUserRepo) SetInactive(ctx context.Context, id uint64) error {
-	if u, ok := f.byID[id]; ok {
-		u.Status = user.StatusInactive
-	}
-	return nil
-}
+func TestResumeRejectsEndedSessions(t *testing.T) {
+	svc, repo, bans := newService()
+	ctx := context.Background()
+	s, _ := svc.CreateGuest(ctx, auth.GuestSignup{Profile: profile("ghost"), Origin: home})
 
-func (f *fakeUserRepo) DeleteInactiveGuests(ctx context.Context, _ interface{}) (int64, error) {
-	// Simplified for testing
-	return 0, nil
-}
-
-func TestCreateGuestUser(t *testing.T) {
-	repo := newFakeRepo()
-	svc := auth.NewService(repo, "test-secret")
-
-	token, u, err := svc.CreateGuestUser(
-		context.Background(),
-		"guest1",
-		user.GenderMale,
-		20,
-		"hello",
-	)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	// A ban revokes the token (version bump) and blocks the account.
+	until := time.Now().Add(time.Hour)
+	repo.SetBan(ctx, s.User.ID, &until)
+	if _, err := svc.Resume(ctx, s.Token, home); !errors.Is(err, auth.ErrSessionEnded) {
+		t.Fatalf("revoked token: want ErrSessionEnded, got %v", err)
 	}
 
-	if token == "" {
-		t.Fatal("expected non-empty token")
+	// A banned network cannot resume or join, even with a fresh profile.
+	s2, _ := svc.CreateGuest(ctx, auth.GuestSignup{Profile: profile("other"), Origin: home})
+	bans[string(svc.HashIP(home.IP))] = true
+	if _, err := svc.Resume(ctx, s2.Token, home); !errors.Is(err, auth.ErrBanned) {
+		t.Fatalf("banned IP resume: %v", err)
+	}
+	if _, err := svc.CreateGuest(ctx, auth.GuestSignup{Profile: profile("new"), Origin: home}); !errors.Is(err, auth.ErrBanned) {
+		t.Fatalf("banned IP join: %v", err)
 	}
 
-	if u.UserType != user.TypeGuest {
-		t.Fatal("expected guest user type")
+	repo.Delete(s2.User.ID)
+	if _, err := svc.Resume(ctx, s2.Token, auth.Origin{IP: "198.51.100.1"}); !errors.Is(err, auth.ErrSessionEnded) {
+		t.Fatalf("deleted account: %v", err)
 	}
-
-	if u.Username != "guest1" {
-		t.Fatalf("username mismatch: got %s, want guest1", u.Username)
-	}
-
-	if u.Status != user.StatusActive {
-		t.Fatal("expected active status")
+	if _, err := svc.Resume(ctx, "not-a-jwt", home); !errors.Is(err, auth.ErrInvalidToken) {
+		t.Fatalf("garbage token: %v", err)
 	}
 }
 
-func TestCreateGuestUserDirect(t *testing.T) {
-	repo := newFakeRepo()
-	svc := auth.NewService(repo, "test-secret")
-
-	token, u, err := svc.CreateGuestUserDirect(context.Background(), "quickguest")
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestEnsureAdminIsIdempotent(t *testing.T) {
+	svc, repo, _ := newService()
+	ctx := context.Background()
+	for range 2 {
+		if err := svc.EnsureAdmin(ctx, "me@example.com", "long-password", "admin"); err != nil {
+			t.Fatalf("EnsureAdmin: %v", err)
+		}
 	}
-
-	if token == "" {
-		t.Fatal("expected non-empty token")
-	}
-
-	if u.UserType != user.TypeGuest {
-		t.Fatal("expected guest user type")
-	}
-
-	if u.Username != "quickguest" {
-		t.Fatalf("username mismatch: got %s", u.Username)
+	u, err := repo.GetByEmail(ctx, "me@example.com")
+	if err != nil || u.Role != user.RoleAdmin || u.Kind != user.KindMember {
+		t.Fatalf("admin = %+v, %v", u, err)
 	}
 }
 
-func TestDuplicateGuestUsername(t *testing.T) {
-	repo := newFakeRepo()
-	svc := auth.NewService(repo, "test-secret")
+func TestGuestEndpointContract(t *testing.T) {
+	svc, _, _ := newService()
+	mux := http.NewServeMux()
+	auth.Routes(mux, svc, httpx.NewIPResolver(false))
 
-	_, _, err := svc.CreateGuestUserDirect(context.Background(), "sameuser")
-	if err != nil {
-		t.Fatalf("first creation failed: %v", err)
+	post := func(body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/auth/guest", strings.NewReader(body))
+		req.RemoteAddr = "203.0.113.9:5555"
+		mux.ServeHTTP(rec, req)
+		return rec
 	}
 
-	_, _, err = svc.CreateGuestUserDirect(context.Background(), "sameuser")
-	if err == nil {
-		t.Fatal("expected error for duplicate username")
+	rec := post(`{"name":"राहुल","gender":"male","age":30,"intent":"night_owl","location":"Delhi"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
+	}
+	var got struct {
+		Token string         `json:"token"`
+		User  map[string]any `json:"user"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &got)
+	if got.Token == "" || got.User["name"] != "राहुल" || got.User["country"] != "IN" || got.User["location"] != "Delhi" {
+		t.Fatalf("unexpected session view: %s", rec.Body)
+	}
+	for _, leaked := range []string{"password_hash", "ip_hash", "token_version"} {
+		if _, ok := got.User[leaked]; ok {
+			t.Fatalf("%s must never be serialized", leaked)
+		}
+	}
+
+	for _, bad := range []string{`{`, `{"name":"x","gender":"male","age":30}`, `{"name":"bob","gender":"male","age":16}`} {
+		if rec := post(bad); rec.Code != http.StatusBadRequest {
+			t.Errorf("body %s: status = %d, want 400", bad, rec.Code)
+		}
 	}
 }

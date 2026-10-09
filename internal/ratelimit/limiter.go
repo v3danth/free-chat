@@ -1,3 +1,5 @@
+// Package ratelimit is a fixed-window limiter. The decision logic is the pure
+// function step; Limiter only adds a lock and a map around it.
 package ratelimit
 
 import (
@@ -6,137 +8,82 @@ import (
 )
 
 type Config struct {
-	Rate         int
-	Window       time.Duration
-	CleanupEvery time.Duration
+	Rate   int
+	Window time.Duration
 }
 
-func DefaultConfig() Config {
-	return Config{
-		Rate:         30,
-		Window:       60 * time.Second,
-		CleanupEvery: 5 * time.Minute,
+type window struct {
+	start time.Time
+	count int
+}
+
+// step returns the user's next window and whether this event is allowed.
+func step(w window, now time.Time, cfg Config) (window, bool) {
+	if now.Sub(w.start) >= cfg.Window {
+		w = window{start: now}
 	}
+	if w.count >= cfg.Rate {
+		return w, false
+	}
+	w.count++
+	return w, true
 }
 
-type userBucket struct {
-	count       int
-	windowStart time.Time
+func remaining(w window, now time.Time, cfg Config) int {
+	if now.Sub(w.start) >= cfg.Window {
+		return cfg.Rate
+	}
+	return max(cfg.Rate-w.count, 0)
 }
 
 type Limiter struct {
-	mu     sync.RWMutex
-	users  map[uint64]*userBucket
-	config Config
-	stopCh chan struct{}
+	cfg Config
+
+	mu        sync.Mutex
+	windows   map[uint64]window
+	lastSweep time.Time
 }
 
-func NewLimiter(cfg Config) *Limiter {
+func New(cfg Config) *Limiter {
 	if cfg.Rate <= 0 {
-		cfg.Rate = DefaultConfig().Rate
+		cfg.Rate = 30
 	}
 	if cfg.Window <= 0 {
-		cfg.Window = DefaultConfig().Window
+		cfg.Window = time.Minute
 	}
-	if cfg.CleanupEvery <= 0 {
-		cfg.CleanupEvery = DefaultConfig().CleanupEvery
-	}
-
-	rl := &Limiter{
-		users:  make(map[uint64]*userBucket),
-		config: cfg,
-		stopCh: make(chan struct{}),
-	}
-
-	go rl.cleanupLoop()
-
-	return rl
+	return &Limiter{cfg: cfg, windows: make(map[uint64]window)}
 }
 
-func (rl *Limiter) Allow(userID uint64) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
+func (l *Limiter) Config() Config { return l.cfg }
+
+func (l *Limiter) Allow(userID uint64) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
 	now := time.Now()
+	l.sweep(now)
 
-	bucket, exists := rl.users[userID]
-	if !exists {
-		rl.users[userID] = &userBucket{
-			count:       1,
-			windowStart: now,
-		}
-		return true
-	}
-
-	if now.Sub(bucket.windowStart) >= rl.config.Window {
-		bucket.count = 1
-		bucket.windowStart = now
-		return true
-	}
-
-	if bucket.count >= rl.config.Rate {
-		return false
-	}
-
-	bucket.count++
-	return true
+	w, ok := step(l.windows[userID], now, l.cfg)
+	l.windows[userID] = w
+	return ok
 }
 
-func (rl *Limiter) Remaining(userID uint64) int {
-	rl.mu.RLock()
-	defer rl.mu.RUnlock()
-
-	bucket, exists := rl.users[userID]
-	if !exists {
-		return rl.config.Rate
-	}
-
-	now := time.Now()
-	if now.Sub(bucket.windowStart) >= rl.config.Window {
-		return rl.config.Rate
-	}
-
-	remaining := rl.config.Rate - bucket.count
-	if remaining < 0 {
-		remaining = 0
-	}
-	return remaining
+func (l *Limiter) Remaining(userID uint64) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return remaining(l.windows[userID], time.Now(), l.cfg)
 }
 
-func (rl *Limiter) Reset(userID uint64) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	delete(rl.users, userID)
-}
-
-func (rl *Limiter) Stop() {
-	close(rl.stopCh)
-}
-
-func (rl *Limiter) cleanupLoop() {
-	ticker := time.NewTicker(rl.config.CleanupEvery)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			rl.cleanup()
-		case <-rl.stopCh:
-			return
+// sweep drops expired windows at most once per window, keeping memory
+// bounded without a background goroutine.
+func (l *Limiter) sweep(now time.Time) {
+	if now.Sub(l.lastSweep) < l.cfg.Window {
+		return
+	}
+	for id, w := range l.windows {
+		if now.Sub(w.start) >= l.cfg.Window {
+			delete(l.windows, id)
 		}
 	}
-}
-
-func (rl *Limiter) cleanup() {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	now := time.Now()
-	threshold := rl.config.Window * 2
-
-	for id, bucket := range rl.users {
-		if now.Sub(bucket.windowStart) > threshold {
-			delete(rl.users, id)
-		}
-	}
+	l.lastSweep = now
 }

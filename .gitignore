@@ -5,3 +5,5 @@ node_modules
 uploads
 bin
 .DS_Store
+
+data

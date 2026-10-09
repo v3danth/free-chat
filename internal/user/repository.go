@@ -3,241 +3,162 @@ package user
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
+
+	"github.com/v3danth/free-chat/internal/apperr"
+	"github.com/v3danth/free-chat/internal/database"
 )
 
-type Repository interface {
-	Create(ctx context.Context, user *User) error
-	GetByID(ctx context.Context, id uint64) (*User, error)
-	GetByEmail(ctx context.Context, email string) (*User, error)
-	GetByUsername(ctx context.Context, username string) (*User, error)
+var (
+	ErrNotFound      = apperr.New(apperr.NotFound, "user not found")
+	ErrEmailTaken    = apperr.New(apperr.Conflict, "email already registered")
+	ErrNameTaken     = apperr.New(apperr.Conflict, "that name belongs to a member")
+	ErrPhotoNotYours = apperr.New(apperr.Forbidden, "you can only use a photo you uploaded")
+)
 
-	// Guest-specific methods
-	IsGuestUsernameAvailable(ctx context.Context, username string) (bool, error)
-	SetInactive(ctx context.Context, id uint64) error
-	DeleteInactiveGuests(ctx context.Context, olderThan time.Duration) (int64, error)
+const memberNameIndex = "uniq_member_name"
+
+type Repository interface {
+	// Create inserts u and returns the stored row, including DB defaults.
+	Create(ctx context.Context, u User) (User, error)
+	GetByID(ctx context.Context, id uint64) (User, error)
+	GetByEmail(ctx context.Context, email string) (User, error)
+	// UpdateCard changes the editable card fields; photoID must belong to
+	// the user and not be removed, or ErrPhotoNotYours.
+	UpdateCard(ctx context.Context, id uint64, intent Intent, about, location string, photoID *uint64) error
+	Touch(ctx context.Context, id uint64) error
+	SetRole(ctx context.Context, id uint64, role Role) error
+	// SetBan sets or clears a ban; banning also revokes every token.
+	SetBan(ctx context.Context, id uint64, until *time.Time) error
+	SetMute(ctx context.Context, id uint64, until *time.Time) error
 }
 
 type MySQLRepository struct {
 	db *sql.DB
 }
 
-func NewRepository(db *sql.DB) Repository {
-	return &MySQLRepository{
-		db: db,
+func NewRepository(db *sql.DB) *MySQLRepository {
+	return &MySQLRepository{db: db}
+}
+
+const selectUser = `
+	SELECT u.id, u.kind, u.role, u.name, u.gender, u.age, u.intent, u.about, u.location,
+	       u.country_code, u.photo_media_id, m.file_key, u.email, u.password_hash,
+	       u.token_version, u.banned_until, u.muted_until, u.ip_hash, u.last_seen_at, u.created_at
+	FROM users u
+	LEFT JOIN media m ON m.id = u.photo_media_id AND m.removed_at IS NULL `
+
+func (r *MySQLRepository) Create(ctx context.Context, u User) (User, error) {
+	const query = `
+		INSERT INTO users (kind, role, name, gender, age, intent, about, location,
+		                   country_code, email, password_hash, ip_hash)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	p := u.Profile
+	res, err := r.db.ExecContext(ctx, query, u.Kind, u.Role, p.Name, p.Gender, p.Age, p.Intent,
+		p.About, p.Location, nullString(u.Country), u.Email, u.PasswordHash, u.IPHash)
+	switch {
+	case database.IsDuplicateKeyOn(err, memberNameIndex):
+		return User{}, ErrNameTaken
+	case database.IsDuplicateKey(err):
+		return User{}, ErrEmailTaken
+	case err != nil:
+		return User{}, err
 	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return User{}, err
+	}
+	return r.GetByID(ctx, uint64(id))
 }
 
-func (r *MySQLRepository) GetByUsername(
-	ctx context.Context,
-	username string,
-) (*User, error) {
-
-	const query = `
-    SELECT 
-		id, 
-		user_type, 
-		status, 
-		username,
-		gender,
-		age,
-		about,
-		email,
-		password_hash,
-		last_seen_at,
-		created_at,
-		updated_at
-        FROM users
-        WHERE username = ?
-        LIMIT 1
-    `
-
-	return r.scanUser(ctx, query, username)
+func (r *MySQLRepository) GetByID(ctx context.Context, id uint64) (User, error) {
+	return r.one(ctx, selectUser+`WHERE u.id = ?`, id)
 }
 
-func (r *MySQLRepository) Create(
-	ctx context.Context,
-	user *User,
-) error {
+func (r *MySQLRepository) GetByEmail(ctx context.Context, email string) (User, error) {
+	return r.one(ctx, selectUser+`WHERE u.email = ?`, email)
+}
 
+func (r *MySQLRepository) UpdateCard(ctx context.Context, id uint64, intent Intent, about, location string, photoID *uint64) error {
 	const query = `
-        INSERT INTO users (
-		user_type, 
-		username, 
-		gender, 
-		age, 
-		about, 
-		email, 
-		password_hash,
-		status
-		)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `
+		UPDATE users SET intent = ?, about = ?, location = ?, photo_media_id = ?
+		WHERE id = ? AND (? IS NULL OR EXISTS (
+			SELECT 1 FROM media WHERE id = ? AND owner_id = ? AND removed_at IS NULL))`
 
-	result, err := r.db.ExecContext(
-		ctx,
-		query,
-		user.UserType,
-		user.Username,
-		user.Gender,
-		user.Age,
-		user.About,
-		user.Email,
-		user.PasswordHash,
-		user.Status,
-	)
-
+	res, err := r.db.ExecContext(ctx, query, intent, about, location, photoID, id, photoID, photoID, id)
 	if err != nil {
 		return err
 	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
+	if n, err := res.RowsAffected(); err != nil {
 		return err
+	} else if n == 0 {
+		if photoID != nil {
+			return ErrPhotoNotYours
+		}
+		return ErrNotFound
 	}
-
-	user.ID = uint64(id)
-
 	return nil
 }
 
-func (r *MySQLRepository) GetByID(
-	ctx context.Context,
-	id uint64,
-) (*User, error) {
-
-	const query = `
-        SELECT 
-			id, 
-			user_type, 
-			status, 
-			username, 
-			gender, 
-			age, 
-			about,
-            email, 
-			password_hash, 
-			last_seen_at, 
-			created_at, 
-			updated_at
-        FROM users
-        WHERE id = ?
-    `
-
-	return r.scanUser(ctx, query, id)
+func (r *MySQLRepository) Touch(ctx context.Context, id uint64) error {
+	return r.exec(ctx, `UPDATE users SET last_seen_at = NOW() WHERE id = ?`, id)
 }
 
-func (r *MySQLRepository) GetByEmail(
-	ctx context.Context,
-	email string,
-) (*User, error) {
-
-	const query = `
-    SELECT 
-		id, 
-		user_type, 
-		status, 
-		username,
-		gender,
-		age,
-		about,
-		email,
-		password_hash,
-		last_seen_at,
-		created_at,
-		updated_at
-        FROM users
-        WHERE email = ?
-        LIMIT 1
-    `
-
-	return r.scanUser(ctx, query, email)
+func (r *MySQLRepository) SetRole(ctx context.Context, id uint64, role Role) error {
+	return r.exec(ctx, `UPDATE users SET role = ? WHERE id = ? AND kind = 'member'`, role, id)
 }
 
-func (r *MySQLRepository) IsGuestUsernameAvailable(ctx context.Context, username string) (bool, error) {
-	const query = `
-        SELECT COUNT(*) 
-        FROM users 
-        WHERE username = ? 
-          AND user_type = 'guest' 
-          AND status = 'active'
-    `
-
-	var count int
-	if err := r.db.QueryRowContext(ctx, query, username).Scan(&count); err != nil {
-		return false, err
-	}
-
-	// Also check if username is taken by registered user
-	const regQuery = `
-        SELECT COUNT(*) 
-        FROM users 
-        WHERE username = ? 
-          AND user_type = 'registered'
-    `
-
-	var regCount int
-	if err := r.db.QueryRowContext(ctx, regQuery, username).Scan(&regCount); err != nil {
-		return false, err
-	}
-
-	return count == 0 && regCount == 0, nil
+func (r *MySQLRepository) SetBan(ctx context.Context, id uint64, until *time.Time) error {
+	return r.exec(ctx, `
+		UPDATE users SET banned_until = ?,
+		       token_version = token_version + IF(? IS NULL, 0, 1)
+		WHERE id = ?`, until, until, id)
 }
 
-func (r *MySQLRepository) SetInactive(ctx context.Context, id uint64) error {
-	const query = `
-        UPDATE users 
-        SET status = 'inactive', last_seen_at = NOW() 
-        WHERE id = ? AND user_type = 'guest'
-    `
-
-	_, err := r.db.ExecContext(ctx, query, id)
-	return err
+func (r *MySQLRepository) SetMute(ctx context.Context, id uint64, until *time.Time) error {
+	return r.exec(ctx, `UPDATE users SET muted_until = ? WHERE id = ?`, until, id)
 }
 
-func (r *MySQLRepository) DeleteInactiveGuests(
-	ctx context.Context,
-	olderThan time.Duration,
-) (int64, error) {
-	const query = `
-        DELETE FROM users 
-        WHERE user_type = 'guest' 
-          AND status = 'inactive'
-          AND last_seen_at < DATE_SUB(NOW(), INTERVAL ? SECOND)
-    `
-
-	result, err := r.db.ExecContext(ctx, query, int64(olderThan.Seconds()))
+func (r *MySQLRepository) exec(ctx context.Context, query string, args ...any) error {
+	res, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
-		return 0, err
+		return err
 	}
-
-	return result.RowsAffected()
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
-func (r *MySQLRepository) scanUser(ctx context.Context, query string, args ...interface{}) (*User, error) {
-	var user User
-
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(
-		&user.ID,
-		&user.UserType,
-		&user.Status,
-		&user.Username,
-		&user.Gender,
-		&user.Age,
-		&user.About,
-		&user.Email,
-		&user.PasswordHash,
-		&user.LastSeenAt,
-		&user.CreatedAt,
-		&user.UpdatedAt,
+func (r *MySQLRepository) one(ctx context.Context, query string, args ...any) (User, error) {
+	var (
+		u             User
+		country       sql.NullString
+		banned, muted sql.NullTime
 	)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(
+		&u.ID, &u.Kind, &u.Role, &u.Profile.Name, &u.Profile.Gender, &u.Profile.Age,
+		&u.Profile.Intent, &u.Profile.About, &u.Profile.Location, &country, &u.PhotoID,
+		&u.PhotoKey, &u.Email, &u.PasswordHash, &u.TokenVersion, &banned, &muted,
+		&u.IPHash, &u.LastSeenAt, &u.CreatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, ErrNotFound
 	}
-	if err != nil {
-		return nil, err
-	}
+	u.Country = country.String
+	u.BannedUntil = database.TimePtr(banned)
+	u.MutedUntil = database.TimePtr(muted)
+	return u, err
+}
 
-	return &user, nil
+func nullString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

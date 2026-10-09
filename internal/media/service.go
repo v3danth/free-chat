@@ -2,246 +2,118 @@ package media
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"mime/multipart"
-	"path/filepath"
+	"crypto/rand"
+	"log"
+	"runtime"
 	"strings"
-)
+	"time"
 
-var (
-	ErrFileTooLarge      = errors.New("file size exceeds limit")
-	ErrInvalidFileType   = errors.New("invalid file type")
-	ErrMediaNotFound     = errors.New("media not found")
-	ErrAlreadyFlagged    = errors.New("already flagged by this user")
-	ErrInvalidFlagReason = errors.New("invalid flag reason")
+	"github.com/v3danth/free-chat/internal/mediapath"
+	"github.com/v3danth/free-chat/internal/ratelimit"
 )
 
 type Service struct {
 	repo    Repository
-	storage Storage
-	config  UploadConfig
+	storage *Storage
+	// cpu bounds concurrent decodes so a burst of uploads cannot starve chat.
+	cpu     chan struct{}
+	uploads *ratelimit.Limiter
 }
 
-func NewService(repo Repository, storage Storage, config UploadConfig) *Service {
-	if config.MaxImageSize == 0 {
-		config.MaxImageSize = DefaultUploadConfig().MaxImageSize
-	}
-	if config.MaxGIFSize == 0 {
-		config.MaxGIFSize = DefaultUploadConfig().MaxGIFSize
-	}
-	if config.MaxVoiceSize == 0 {
-		config.MaxVoiceSize = DefaultUploadConfig().MaxVoiceSize
-	}
-	if config.FlagThreshold == 0 {
-		config.FlagThreshold = DefaultUploadConfig().FlagThreshold
-	}
-	if len(config.AllowedImageMIME) == 0 {
-		config.AllowedImageMIME = DefaultUploadConfig().AllowedImageMIME
-	}
-	if len(config.AllowedGIFMIME) == 0 {
-		config.AllowedGIFMIME = DefaultUploadConfig().AllowedGIFMIME
-	}
-	if len(config.AllowedVoiceMIME) == 0 {
-		config.AllowedVoiceMIME = DefaultUploadConfig().AllowedVoiceMIME
-	}
-
+func NewService(repo Repository, storage *Storage) *Service {
 	return &Service{
 		repo:    repo,
 		storage: storage,
-		config:  config,
+		cpu:     make(chan struct{}, runtime.NumCPU()),
+		uploads: ratelimit.New(ratelimit.Config{Rate: 20, Window: 10 * time.Minute}),
 	}
 }
 
-func (s *Service) UploadImage(
-	ctx context.Context,
-	userID uint64,
-	file *multipart.FileHeader,
-) (*Media, error) {
-	if file.Size > s.config.MaxImageSize {
-		return nil, fmt.Errorf("%w: max %d bytes", ErrFileTooLarge, s.config.MaxImageSize)
+func (s *Service) Upload(ctx context.Context, owner uint64, raw []byte) (Media, error) {
+	if !s.uploads.Allow(owner) {
+		return Media{}, ErrUploadRate
 	}
 
-	if !s.isAllowedMIME(file.Header.Get("Content-Type"), s.config.AllowedImageMIME) {
-		return nil, ErrInvalidFileType
+	select {
+	case s.cpu <- struct{}{}:
+	case <-ctx.Done():
+		return Media{}, ctx.Err()
 	}
-
-	return s.uploadFile(ctx, userID, MediaTypeImage, file)
-}
-
-func (s *Service) UploadGIF(
-	ctx context.Context,
-	userID uint64,
-	file *multipart.FileHeader,
-) (*Media, error) {
-	if file.Size > s.config.MaxGIFSize {
-		return nil, fmt.Errorf("%w: max %d bytes", ErrFileTooLarge, s.config.MaxGIFSize)
-	}
-
-	if !s.isAllowedMIME(file.Header.Get("Content-Type"), s.config.AllowedGIFMIME) {
-		return nil, ErrInvalidFileType
-	}
-
-	return s.uploadFile(ctx, userID, MediaTypeGIF, file)
-}
-
-func (s *Service) UploadVoice(
-	ctx context.Context,
-	userID uint64,
-	file *multipart.FileHeader,
-) (*Media, error) {
-	if file.Size > s.config.MaxVoiceSize {
-		return nil, fmt.Errorf("%w: max %d bytes", ErrFileTooLarge, s.config.MaxVoiceSize)
-	}
-
-	if !s.isAllowedMIME(file.Header.Get("Content-Type"), s.config.AllowedVoiceMIME) {
-		return nil, ErrInvalidFileType
-	}
-
-	return s.uploadFile(ctx, userID, MediaTypeVoice, file)
-}
-
-func (s *Service) uploadFile(
-	ctx context.Context,
-	userID uint64,
-	mediaType MediaType,
-	file *multipart.FileHeader,
-) (*Media, error) {
-	src, err := file.Open()
+	p, err := Process(raw)
+	<-s.cpu
 	if err != nil {
-		return nil, err
+		return Media{}, err
 	}
-	defer src.Close()
 
-	ext := filepath.Ext(file.Filename)
-	relPath, err := s.storage.Save(mediaType, src, ext)
+	banned, err := s.repo.IsHashBanned(ctx, p.SHA256[:])
 	if err != nil {
-		return nil, err
+		return Media{}, err
+	}
+	if banned {
+		return Media{}, ErrBannedImage
 	}
 
-	m := &Media{
-		UserID:    userID,
-		MediaType: mediaType,
-		FileName:  file.Filename,
-		FilePath:  relPath,
-		FileSize:  uint64(file.Size),
-		MimeType:  file.Header.Get("Content-Type"),
+	// Random, unguessable names: a private photo's URL is its capability.
+	key := strings.ToLower(rand.Text())
+	if err := s.storage.SaveAll(key, map[mediapath.Variant][]byte{
+		mediapath.Full: p.Full, mediapath.Thumb: p.Thumb, mediapath.Blur: p.Blur,
+	}); err != nil {
+		return Media{}, err
 	}
 
-	if err := s.repo.CreateMedia(ctx, m); err != nil {
-		s.storage.Delete(relPath)
-		return nil, err
-	}
-
-	return m, nil
-}
-
-func (s *Service) GetMedia(ctx context.Context, id uint64) (*Media, error) {
-	m, err := s.repo.GetMediaByID(ctx, id)
+	m, err := s.repo.Create(ctx, Media{
+		OwnerID: owner,
+		Key:     key,
+		SHA256:  p.SHA256[:],
+		Width:   p.Width,
+		Height:  p.Height,
+		Bytes:   len(p.Full),
+	})
 	if err != nil {
-		return nil, err
-	}
-	if m == nil {
-		return nil, ErrMediaNotFound
+		s.deleteFiles(key)
+		return Media{}, err
 	}
 	return m, nil
 }
 
-func (s *Service) FlagMedia(
-	ctx context.Context,
-	mediaID,
-	reporterID uint64,
-	reason FlagReason,
-) error {
-	if !isValidFlagReason(reason) {
-		return ErrInvalidFlagReason
-	}
-
-	// Check if media exists
-	media, err := s.repo.GetMediaByID(ctx, mediaID)
+// Attach clears an image for sharing by its owner.
+func (s *Service) Attach(ctx context.Context, mediaID, owner uint64) (Attachment, error) {
+	m, err := s.repo.GetByID(ctx, mediaID)
 	if err != nil {
-		return err
+		return Attachment{}, err
 	}
-	if media == nil {
-		return ErrMediaNotFound
+	if m.OwnerID != owner {
+		return Attachment{}, ErrNotOwner
 	}
+	if m.RemovedAt != nil {
+		return Attachment{}, ErrRemoved
+	}
+	return AttachmentOf(m.ID, m.Key), nil
+}
 
-	// Check if user already flagged
-	alreadyFlagged, err := s.repo.HasUserFlagged(ctx, mediaID, reporterID)
+func (s *Service) Get(ctx context.Context, id uint64) (Media, error) { return s.repo.GetByID(ctx, id) }
+
+// Remove takes an image down everywhere: the row is marked removed, the
+// files are deleted, and with banHash the exact file can never return.
+func (s *Service) Remove(ctx context.Context, id, actorID uint64, banHash bool) (Media, error) {
+	m, err := s.repo.MarkRemoved(ctx, id)
 	if err != nil {
-		return err
+		return Media{}, err
 	}
-	if alreadyFlagged {
-		return ErrAlreadyFlagged
-	}
-
-	// Create flag
-	flag := &Flag{
-		MediaID:    mediaID,
-		ReporterID: reporterID,
-		Reason:     reason,
-	}
-
-	if err := s.repo.CreateFlag(ctx, flag); err != nil {
-		return err
-	}
-
-	// Increment flag count
-	if err := s.repo.IncrementFlagCount(ctx, mediaID); err != nil {
-		return err
-	}
-
-	// Check if should auto-flag
-	media.FlagCount++
-	if media.FlagCount >= s.config.FlagThreshold && !media.IsFlagged {
-		if err := s.repo.SetFlagged(ctx, mediaID, true); err != nil {
-			return err
+	if banHash {
+		if err := s.repo.BanHash(ctx, m.SHA256, actorID); err != nil {
+			return Media{}, err
 		}
 	}
-
-	return nil
+	s.deleteFiles(m.Key)
+	return m, nil
 }
 
-func (s *Service) DeleteMedia(ctx context.Context, id, userID uint64) error {
-	media, err := s.repo.GetMediaByID(ctx, id)
-	if err != nil {
-		return err
-	}
-	if media == nil {
-		return ErrMediaNotFound
-	}
+// DeleteFiles removes a key's files; used when the rows are already gone.
+func (s *Service) DeleteFiles(key string) { s.deleteFiles(key) }
 
-	// Only allow owner or admin to delete
-	if media.UserID != userID {
-		return errors.New("unauthorized")
-	}
-
-	if err := s.repo.DeleteMedia(ctx, id); err != nil {
-		return err
-	}
-
-	return s.storage.Delete(media.FilePath)
-}
-
-func (s *Service) isAllowedMIME(mimeType string, allowed []string) bool {
-	for _, a := range allowed {
-		if strings.EqualFold(mimeType, a) {
-			return true
-		}
-	}
-	return false
-}
-
-func isValidFlagReason(reason FlagReason) bool {
-	switch reason {
-	case FlagReasonInappropriate,
-		FlagReasonSpam,
-		FlagReasonNudity,
-		FlagReasonViolence,
-		FlagReasonCopyright,
-		FlagReasonOther:
-		return true
-	default:
-		return false
+func (s *Service) deleteFiles(key string) {
+	if err := s.storage.DeleteAll(key); err != nil {
+		log.Printf("media: delete files for %s: %v", key, err)
 	}
 }

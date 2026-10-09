@@ -1,110 +1,157 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/gorilla/websocket"
 
+	"github.com/v3danth/free-chat/internal/apperr"
 	"github.com/v3danth/free-chat/internal/auth"
+	"github.com/v3danth/free-chat/internal/httpx"
+	"github.com/v3danth/free-chat/internal/user"
 )
 
+// CheckOrigin is left nil: gorilla then rejects cross-origin browser
+// handshakes, while non-browser clients (no Origin header) are allowed.
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // TODO: Restrict in production
-	},
 }
 
-type Handler struct {
-	hub     *Hub
-	jwt     *auth.JWTManager
-	authSvc *auth.Service
+type Profiles interface {
+	GetByID(ctx context.Context, id uint64) (user.User, error)
+	UpdateCard(ctx context.Context, id uint64, intent user.Intent, about, location string, photoID *uint64) error
 }
 
-func NewHandler(
-	hub *Hub,
-	jwt *auth.JWTManager,
-	authSvc *auth.Service,
-) *Handler {
-	return &Handler{
-		hub:     hub,
-		jwt:     jwt,
-		authSvc: authSvc,
-	}
+func Routes(mux *http.ServeMux, hub *Hub, authSvc *auth.Service, profiles Profiles, ipOf httpx.IPResolver) {
+	h := handler{hub: hub, auth: authSvc, profiles: profiles}
+	mux.HandleFunc("GET /ws", func(w http.ResponseWriter, r *http.Request) { h.serveWS(w, r, ipOf) })
+	mux.Handle("GET /me", authSvc.RequireBearer(ipOf, h.me))
+	mux.Handle("PATCH /me", authSvc.RequireBearer(ipOf, h.updateMe))
 }
 
-func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
-	token := r.URL.Query().Get("token")
-	username := r.URL.Query().Get("username")
+type handler struct {
+	hub      *Hub
+	auth     *auth.Service
+	profiles Profiles
+}
 
-	var claims *auth.Claims
-	var err error
-
-	// Direct guest login: if no token but username provided, create guest directly
-	if token == "" && username != "" {
-		username = strings.TrimSpace(username)
-		if username == "" {
-			http.Error(w, "username is required", http.StatusBadRequest)
-			return
-		}
-
-		if len(username) > 32 {
-			http.Error(w, "username too long", http.StatusBadRequest)
-			return
-		}
-
-		token, _, err = h.authSvc.CreateGuestUserDirect(r.Context(), username)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusConflict)
-			return
-		}
-	}
-
-	if token == "" {
-		http.Error(w, "token or username is required", http.StatusUnauthorized)
+// serveWS authenticates before upgrading, so a bad token gets a normal HTTP
+// error. Browsers cannot set headers on a WebSocket, hence ?token=.
+func (h handler) serveWS(w http.ResponseWriter, r *http.Request, ipOf httpx.IPResolver) {
+	u, err := h.auth.Resume(r.Context(), r.URL.Query().Get("token"), auth.Origin{IP: ipOf(r)})
+	if err != nil {
+		httpx.Error(w, err)
 		return
 	}
-
-	claims, err = h.jwt.Validate(token)
+	blocked, err := h.hub.Blocks.Between(r.Context(), u.ID)
 	if err != nil {
-		http.Error(w, "invalid token", http.StatusUnauthorized)
+		httpx.Error(w, err)
 		return
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		return // Upgrade has already written the HTTP error.
+	}
+	c := newClient(u, blocked, conn)
+	h.hub.register(c)
+
+	go c.writePump()
+	go c.readPump(h.hub)
+}
+
+func (h handler) me(w http.ResponseWriter, r *http.Request, id auth.Identity) {
+	u, err := h.profiles.GetByID(r.Context(), id.UserID)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, user.ToSelf(u))
+}
+
+// cardUpdate is a partial update: an absent field keeps its value. PhotoID
+// stays raw to tell "absent" (keep) from null (clear).
+type cardUpdate struct {
+	Intent   *string         `json:"intent"`
+	About    *string         `json:"about"`
+	Location *string         `json:"location"`
+	PhotoID  json.RawMessage `json:"photo_id"`
+}
+
+var errPhotoID = apperr.New(apperr.Invalid, "photo_id must be an image id or null")
+
+// apply merges the update into the current card, parsing each field it sets.
+func (req cardUpdate) apply(u user.User) (user.Profile, *uint64, error) {
+	p := u.Profile
+	var err error
+	if req.Intent != nil {
+		if p.Intent, err = user.ParseIntent(*req.Intent); err != nil {
+			return p, nil, err
+		}
+	}
+	if req.About != nil {
+		if p.About, err = user.ParseAbout(*req.About); err != nil {
+			return p, nil, err
+		}
+	}
+	if req.Location != nil {
+		if p.Location, err = user.ParseLocation(*req.Location); err != nil {
+			return p, nil, err
+		}
+	}
+
+	photo := u.PhotoID
+	if u.PhotoKey == nil {
+		photo = nil // a photo a moderator removed is not kept
+	}
+	if len(req.PhotoID) > 0 {
+		photo = nil
+		if string(req.PhotoID) != "null" {
+			var id uint64
+			if json.Unmarshal(req.PhotoID, &id) != nil || id == 0 {
+				return p, nil, errPhotoID
+			}
+			photo = &id
+		}
+	}
+	return p, photo, nil
+}
+
+// updateMe edits the card fields others see. Name, age and gender are fixed
+// for the visit: changing them mid-chat would make impersonation trivial.
+func (h handler) updateMe(w http.ResponseWriter, r *http.Request, id auth.Identity) {
+	req, err := httpx.DecodeJSON[cardUpdate](w, r)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	current, err := h.profiles.GetByID(r.Context(), id.UserID)
+	if err != nil {
+		httpx.Error(w, err)
 		return
 	}
 
-	client := &Client{
-		hub:      h.hub,
-		conn:     conn,
-		send:     make(chan []byte, 256),
-		userID:   claims.UserID,
-		username: claims.Username,
-		userType: claims.UserType,
-		rooms:    make(map[uint64]bool),
+	p, photo, err := req.apply(current)
+	if err == nil {
+		p, err = p.Screened(h.hub.Filter.Load().Screen)
+	}
+	if err != nil {
+		httpx.Error(w, err)
+		return
 	}
 
-	// Send the token back to guest users so they can reconnect
-	if r.URL.Query().Get("username") != "" {
-		tokenResp := struct {
-			Type  string `json:"type"`
-			Token string `json:"token"`
-		}{
-			Type:  "auth",
-			Token: token,
-		}
-		if data, err := json.Marshal(tokenResp); err == nil {
-			client.send <- data
-		}
+	if err := h.profiles.UpdateCard(r.Context(), id.UserID, p.Intent, p.About, p.Location, photo); err != nil {
+		httpx.Error(w, err)
+		return
 	}
-
-	h.hub.register <- client
-
-	go client.Write()
-	go client.Read()
+	fresh, err := h.profiles.GetByID(r.Context(), id.UserID)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	h.hub.UpdateUser(fresh)
+	httpx.JSON(w, http.StatusOK, user.ToSelf(fresh))
 }

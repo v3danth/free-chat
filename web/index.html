@@ -1,146 +1,19 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FreeChat</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Free Online Chat India - chat with strangers, no sign-up</title>
+<meta name="description" content="Free online chat in India. Make a card, walk into the room and talk to strangers. No sign-up, no app, gone when you leave.">
+<meta name="theme-color" content="#0E0F13">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
-
-    <!-- Toast Notifications -->
-    <div id="toast-container" class="toast-container"></div>
-
-    <!-- AUTHENTICATION VIEW -->
-    <section id="view-auth" class="view active" aria-label="Authentication">
-        <div class="auth-container">
-            <header class="auth-header">
-                <h1>Join the Conversation</h1>
-                <p>No account needed. Start chatting instantly.</p>
-            </header>
-
-            <!-- Guest Form -->
-            <form id="form-guest" class="auth-form" autocomplete="off">
-                <div class="input-group">
-                    <input type="text" id="input-guest-name" placeholder=" " required minlength="2" maxlength="32" pattern="[a-zA-Z0-9_]+">
-                    <label for="input-guest-name">Pick a Username</label>
-                </div>
-                
-                <!-- Spec: Optional payload fields -->
-                <button type="button" id="btn-toggle-guest-options" class="btn btn-text btn-sm">+ More Options</button>
-                <div id="guest-options" class="optional-fields hidden">
-                    <div class="input-group">
-                        <select id="input-guest-gender" name="gender">
-                            <option value="other">Prefer not to say</option>
-                            <option value="male">Male</option>
-                            <option value="female">Female</option>
-                            <option value="non-binary">Non-Binary</option>
-                            <option value="couple">Couple</option>
-                        </select>
-                        <label for="input-guest-gender">Gender</label>
-                    </div>
-                    <div class="input-group">
-                        <input type="number" id="input-guest-age" placeholder=" " min="18" max="120">
-                        <label for="input-guest-age">Age (Optional)</label>
-                    </div>
-                    <div class="input-group">
-                        <input type="text" id="input-guest-about" placeholder=" " maxlength="50">
-                        <label for="input-guest-about">About Me</label>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-primary btn-block">Start Chatting</button>
-            </form>
-
-            <div class="auth-divider"><span>OR</span></div>
-
-            <!-- Login Form -->
-            <form id="form-login" class="auth-form hidden" autocomplete="off">
-                <div class="input-group">
-                    <input type="email" id="input-email" placeholder=" " required>
-                    <label for="input-email">Email Address</label>
-                </div>
-                <div class="input-group">
-                    <input type="password" id="input-password" placeholder=" " required minlength="6">
-                    <label for="input-password">Password</label>
-                </div>
-                <button type="submit" class="btn btn-primary btn-block">Login</button>
-            </form>
-
-            <nav class="auth-nav">
-                <!-- Spec: /auth/register does NOT return a token, user must login after -->
-                <button id="btn-toggle-auth" class="btn btn-secondary btn-block">Create an Account</button>
-            </nav>
-        </div>
-    </section>
-
-    <!-- CHAT VIEW -->
-    <section id="view-chat" class="view" aria-label="Chat Interface">
-        
-        <header class="chat-mobile-header">
-            <button id="btn-toggle-sidebar" class="icon-btn" aria-label="Toggle menu">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-            </button>
-            <h2 id="mobile-room-name">General</h2>
-            <button id="btn-logout" class="icon-btn" aria-label="Logout">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-            </button>
-        </header>
-
-        <div class="chat-layout">
-            <aside id="sidebar" class="sidebar" aria-label="Chat details">
-                <div class="sidebar-header">
-                    <h2>FreeChat</h2>
-                    <button id="btn-close-sidebar" class="icon-btn mobile-only" aria-label="Close menu">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    </button>
-                </div>
-                
-                <div class="sidebar-section">
-                    <h3>Room</h3>
-                    <p id="room-name-display">General</p>
-                    <p class="meta" id="user-count-display">Connecting...</p>
-                </div>
-
-                <div class="sidebar-section">
-                    <h3>Profile</h3>
-                    <p id="user-name-display">Guest</p>
-                    <p class="meta" id="user-type-display">guest</p>
-                    <button id="btn-logout-desktop" class="btn btn-text">Logout</button>
-                </div>
-            </aside>
-
-            <main class="chat-main">
-                <div id="sidebar-overlay" class="sidebar-overlay"></div>
-
-                <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"></div>
-
-                <div id="system-alerts" class="system-alerts"></div>
-
-                <footer class="chat-input-area">
-                    <input type="file" id="input-media" accept="image/jpeg,image/png,image/webp,image/gif,audio/webm,audio/ogg,audio/mp4,audio/mpeg" class="hidden">
-                    
-                    <!-- Spec: Media preview before sending -->
-                    <div id="media-preview-container" class="media-preview-container hidden">
-                        <div id="media-preview-content"></div>
-                        <button type="button" id="btn-cancel-media" class="icon-btn small danger" aria-label="Cancel upload">✕</button>
-                    </div>
-
-                    <button id="btn-attach" class="icon-btn" aria-label="Attach media">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                    </button>
-                    
-                    <form id="form-chat" class="chat-form">
-                        <input type="text" id="input-message" placeholder="Type a message..." autocomplete="off" required>
-                        <button type="submit" class="btn btn-primary icon-only" aria-label="Send message">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-                        </button>
-                    </form>
-                </footer>
-            </main>
-        </div>
-    </section>
-
-    <script src="app.js"></script>
+<div id="app"></div>
+<div id="toasts" aria-live="polite"></div>
+<script src="/app.js" type="module"></script>
 </body>
 </html>

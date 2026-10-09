@@ -1,0 +1,2702 @@
+[
+ {
+  "name": "stranger_0",
+  "normalized": "stranger_0",
+  "seed": 2116511191556288,
+  "tier": "common",
+  "species": "frog",
+  "grid": "f97d5058ee03b9a1",
+  "blink": "f97d5058ee03b9a1"
+ },
+ {
+  "name": "stranger_1",
+  "normalized": "stranger_1",
+  "seed": 1319496982845696,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "3b18c58f5bcb0dfc",
+  "blink": "3b18c58f5bcb0dfc"
+ },
+ {
+  "name": "stranger_2",
+  "normalized": "stranger_2",
+  "seed": 6688849476372387,
+  "tier": "common",
+  "species": "axolotl",
+  "grid": "c6ac3145ee178810",
+  "blink": "721a9890430d2945"
+ },
+ {
+  "name": "stranger_3",
+  "normalized": "stranger_3",
+  "seed": 7538887768841557,
+  "tier": "rare",
+  "species": "mouse",
+  "grid": "2979158f53373b39",
+  "blink": "f5743446abc652d2"
+ },
+ {
+  "name": "stranger_4",
+  "normalized": "stranger_4",
+  "seed": 2910572492149025,
+  "tier": "common",
+  "species": "pig",
+  "grid": "9647c140b2d21abe",
+  "blink": "9647c140b2d21abe"
+ },
+ {
+  "name": "stranger_5",
+  "normalized": "stranger_5",
+  "seed": 6529638504818679,
+  "tier": "legendary",
+  "species": "bunny",
+  "grid": "1f3a4c7c66744f09",
+  "blink": "52f58a80e2773fe7"
+ },
+ {
+  "name": "stranger_6",
+  "normalized": "stranger_6",
+  "seed": 3790429100700865,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "a99023a5c52da500",
+  "blink": "a99023a5c52da500"
+ },
+ {
+  "name": "stranger_7",
+  "normalized": "stranger_7",
+  "seed": 7893873477582198,
+  "tier": "common",
+  "species": "axolotl",
+  "grid": "89a20a00affa11a1",
+  "blink": "abd289cdf8790fdc"
+ },
+ {
+  "name": "stranger_8",
+  "normalized": "stranger_8",
+  "seed": 4885147360554023,
+  "tier": "common",
+  "species": "bear",
+  "grid": "2eb3471c48e6465a",
+  "blink": "fe0000c720bb9131"
+ },
+ {
+  "name": "stranger_9",
+  "normalized": "stranger_9",
+  "seed": 2840926820335561,
+  "tier": "common",
+  "species": "dog",
+  "grid": "d5865195ad8bed78",
+  "blink": "d5865195ad8bed78"
+ },
+ {
+  "name": "stranger_10",
+  "normalized": "stranger_10",
+  "seed": 6080399141616046,
+  "tier": "common",
+  "species": "owl",
+  "grid": "92c7e4962fc907ce",
+  "blink": "92c7e4962fc907ce"
+ },
+ {
+  "name": "stranger_11",
+  "normalized": "stranger_11",
+  "seed": 137672468860998,
+  "tier": "common",
+  "species": "bear",
+  "grid": "33a91fbfa4d954dc",
+  "blink": "33a91fbfa4d954dc"
+ },
+ {
+  "name": "stranger_12",
+  "normalized": "stranger_12",
+  "seed": 847615729703677,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "b4055e753d26f97f",
+  "blink": "b4055e753d26f97f"
+ },
+ {
+  "name": "stranger_13",
+  "normalized": "stranger_13",
+  "seed": 7196929089504352,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "49da8ad222e5ab34",
+  "blink": "b9f57fead912f691"
+ },
+ {
+  "name": "stranger_14",
+  "normalized": "stranger_14",
+  "seed": 5516548077927807,
+  "tier": "common",
+  "species": "dog",
+  "grid": "5a1c4bedc8a85a3e",
+  "blink": "6786516cb9c26a34"
+ },
+ {
+  "name": "stranger_15",
+  "normalized": "stranger_15",
+  "seed": 5310700249892077,
+  "tier": "common",
+  "species": "cat",
+  "grid": "d6627ea81c27f5a6",
+  "blink": "d6627ea81c27f5a6"
+ },
+ {
+  "name": "stranger_16",
+  "normalized": "stranger_16",
+  "seed": 7140950558410878,
+  "tier": "common",
+  "species": "frog",
+  "grid": "2c88683443ca0944",
+  "blink": "2c88683443ca0944"
+ },
+ {
+  "name": "stranger_17",
+  "normalized": "stranger_17",
+  "seed": 4859362315572374,
+  "tier": "common",
+  "species": "axolotl",
+  "grid": "1da63022fe73a2e3",
+  "blink": "6f5427ef09e833ed"
+ },
+ {
+  "name": "stranger_18",
+  "normalized": "stranger_18",
+  "seed": 6642219531206318,
+  "tier": "common",
+  "species": "axolotl",
+  "grid": "0b65e7637108fdef",
+  "blink": "cf3c25734bdeb073"
+ },
+ {
+  "name": "stranger_19",
+  "normalized": "stranger_19",
+  "seed": 5049365756379744,
+  "tier": "common",
+  "species": "bear",
+  "grid": "575b9263a11406d4",
+  "blink": "575b9263a11406d4"
+ },
+ {
+  "name": "stranger_20",
+  "normalized": "stranger_20",
+  "seed": 5275552361029576,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "f1fad40473febfae",
+  "blink": "f1fad40473febfae"
+ },
+ {
+  "name": "stranger_21",
+  "normalized": "stranger_21",
+  "seed": 4472964332060651,
+  "tier": "common",
+  "species": "cat",
+  "grid": "3ed01d3a80553fff",
+  "blink": "367aa06a54971d63"
+ },
+ {
+  "name": "stranger_22",
+  "normalized": "stranger_22",
+  "seed": 1243768110877778,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "46aa5cb98bf1aa93",
+  "blink": "46aa5cb98bf1aa93"
+ },
+ {
+  "name": "stranger_23",
+  "normalized": "stranger_23",
+  "seed": 6723178425667271,
+  "tier": "rare",
+  "species": "frog",
+  "grid": "c7a091b77766b3e5",
+  "blink": "ee983005c0a442ae"
+ },
+ {
+  "name": "stranger_24",
+  "normalized": "stranger_24",
+  "seed": 3157123378469257,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "e21cb2891dc935ae",
+  "blink": "1f1e3a9665d81267"
+ },
+ {
+  "name": "stranger_25",
+  "normalized": "stranger_25",
+  "seed": 3394180241206184,
+  "tier": "common",
+  "species": "bear",
+  "grid": "2d12a4588ffe6d4e",
+  "blink": "fb6b5174538d73b2"
+ },
+ {
+  "name": "stranger_26",
+  "normalized": "stranger_26",
+  "seed": 1568633945828700,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "f7fe6760ceeaa8a4",
+  "blink": "075a68b354c23e60"
+ },
+ {
+  "name": "stranger_27",
+  "normalized": "stranger_27",
+  "seed": 3745285082950101,
+  "tier": "common",
+  "species": "panda",
+  "grid": "d2226c7acda69cf1",
+  "blink": "d2226c7acda69cf1"
+ },
+ {
+  "name": "stranger_28",
+  "normalized": "stranger_28",
+  "seed": 541577156982594,
+  "tier": "common",
+  "species": "bear",
+  "grid": "c725fb988c040174",
+  "blink": "4a586fd78eec8f44"
+ },
+ {
+  "name": "stranger_29",
+  "normalized": "stranger_29",
+  "seed": 6483791005998377,
+  "tier": "common",
+  "species": "pig",
+  "grid": "d0cd77620197dd07",
+  "blink": "4ff250e03a0bc6a9"
+ },
+ {
+  "name": "stranger_30",
+  "normalized": "stranger_30",
+  "seed": 3810162197917289,
+  "tier": "common",
+  "species": "dog",
+  "grid": "72147d57b6d8a476",
+  "blink": "72147d57b6d8a476"
+ },
+ {
+  "name": "stranger_31",
+  "normalized": "stranger_31",
+  "seed": 7438218878187731,
+  "tier": "common",
+  "species": "dog",
+  "grid": "b03ceb068c7bfae1",
+  "blink": "eb4e303c3e05713f"
+ },
+ {
+  "name": "stranger_32",
+  "normalized": "stranger_32",
+  "seed": 3816350598571858,
+  "tier": "common",
+  "species": "fox",
+  "grid": "246bff1ed2b64bc7",
+  "blink": "246bff1ed2b64bc7"
+ },
+ {
+  "name": "stranger_33",
+  "normalized": "stranger_33",
+  "seed": 8669652854691522,
+  "tier": "common",
+  "species": "owl",
+  "grid": "e377c67675b9df9b",
+  "blink": "e377c67675b9df9b"
+ },
+ {
+  "name": "stranger_34",
+  "normalized": "stranger_34",
+  "seed": 6468954354468354,
+  "tier": "rare",
+  "species": "mouse",
+  "grid": "67f2f985d023fffd",
+  "blink": "64376b35638fa650"
+ },
+ {
+  "name": "stranger_35",
+  "normalized": "stranger_35",
+  "seed": 3466097673680146,
+  "tier": "common",
+  "species": "fox",
+  "grid": "007ee8440bd10c04",
+  "blink": "007ee8440bd10c04"
+ },
+ {
+  "name": "stranger_36",
+  "normalized": "stranger_36",
+  "seed": 4768720119287297,
+  "tier": "common",
+  "species": "panda",
+  "grid": "b2b2b3d4dd05122a",
+  "blink": "2a1898cc171aad53"
+ },
+ {
+  "name": "stranger_37",
+  "normalized": "stranger_37",
+  "seed": 4496717040458755,
+  "tier": "rare",
+  "species": "frog",
+  "grid": "6dc010bddcb73b3a",
+  "blink": "6dc010bddcb73b3a"
+ },
+ {
+  "name": "stranger_38",
+  "normalized": "stranger_38",
+  "seed": 8256978242731037,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "08b162061a1b4393",
+  "blink": "94398eac3210271c"
+ },
+ {
+  "name": "stranger_39",
+  "normalized": "stranger_39",
+  "seed": 3829741653435938,
+  "tier": "rare",
+  "species": "mouse",
+  "grid": "788ec3ccc475e4a4",
+  "blink": "1d684e485c23a8ca"
+ },
+ {
+  "name": "stranger_40",
+  "normalized": "stranger_40",
+  "seed": 4416640759298544,
+  "tier": "common",
+  "species": "dog",
+  "grid": "191c1f1e21852ffc",
+  "blink": "191c1f1e21852ffc"
+ },
+ {
+  "name": "stranger_41",
+  "normalized": "stranger_41",
+  "seed": 8752174000860,
+  "tier": "common",
+  "species": "frog",
+  "grid": "68055cdaac20b607",
+  "blink": "68055cdaac20b607"
+ },
+ {
+  "name": "stranger_42",
+  "normalized": "stranger_42",
+  "seed": 4709233976120458,
+  "tier": "common",
+  "species": "dog",
+  "grid": "c1ad75c15de6671d",
+  "blink": "c1ad75c15de6671d"
+ },
+ {
+  "name": "stranger_43",
+  "normalized": "stranger_43",
+  "seed": 3702416815324274,
+  "tier": "rare",
+  "species": "fox",
+  "grid": "fd8a9d1f993cbca3",
+  "blink": "fd8a9d1f993cbca3"
+ },
+ {
+  "name": "stranger_44",
+  "normalized": "stranger_44",
+  "seed": 1374227900428721,
+  "tier": "common",
+  "species": "owl",
+  "grid": "368de1ecd897d083",
+  "blink": "44e7d69b7676177c"
+ },
+ {
+  "name": "stranger_45",
+  "normalized": "stranger_45",
+  "seed": 5370949609937903,
+  "tier": "common",
+  "species": "frog",
+  "grid": "2eb994811a444614",
+  "blink": "177896a10017fe11"
+ },
+ {
+  "name": "stranger_46",
+  "normalized": "stranger_46",
+  "seed": 4674798058220044,
+  "tier": "common",
+  "species": "panda",
+  "grid": "d32b8233d654b9a5",
+  "blink": "d32b8233d654b9a5"
+ },
+ {
+  "name": "stranger_47",
+  "normalized": "stranger_47",
+  "seed": 5759353005944452,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "3d138d1a73386a80",
+  "blink": "3d138d1a73386a80"
+ },
+ {
+  "name": "stranger_48",
+  "normalized": "stranger_48",
+  "seed": 8338757065851394,
+  "tier": "common",
+  "species": "cat",
+  "grid": "1a47d1b6c149a809",
+  "blink": "1a47d1b6c149a809"
+ },
+ {
+  "name": "stranger_49",
+  "normalized": "stranger_49",
+  "seed": 4536165550890253,
+  "tier": "common",
+  "species": "cat",
+  "grid": "784f3ecd9293a7f7",
+  "blink": "784f3ecd9293a7f7"
+ },
+ {
+  "name": "stranger_50",
+  "normalized": "stranger_50",
+  "seed": 6037707938873224,
+  "tier": "epic",
+  "species": "owl",
+  "grid": "95783e28b9b2f432",
+  "blink": "4d3ded27860afd12"
+ },
+ {
+  "name": "stranger_51",
+  "normalized": "stranger_51",
+  "seed": 3184105002276499,
+  "tier": "common",
+  "species": "frog",
+  "grid": "7de1c2a5e981832f",
+  "blink": "7de1c2a5e981832f"
+ },
+ {
+  "name": "stranger_52",
+  "normalized": "stranger_52",
+  "seed": 3928289486229405,
+  "tier": "common",
+  "species": "owl",
+  "grid": "bc3316ee3bd86491",
+  "blink": "22bc90b467806bb3"
+ },
+ {
+  "name": "stranger_53",
+  "normalized": "stranger_53",
+  "seed": 1164530022905986,
+  "tier": "rare",
+  "species": "hamster",
+  "grid": "ff43c302b9be903c",
+  "blink": "cbabafb500d3cd1b"
+ },
+ {
+  "name": "stranger_54",
+  "normalized": "stranger_54",
+  "seed": 8129150566601455,
+  "tier": "common",
+  "species": "axolotl",
+  "grid": "02c36198e8c60c5d",
+  "blink": "e747c56ca4efc0f1"
+ },
+ {
+  "name": "stranger_55",
+  "normalized": "stranger_55",
+  "seed": 2835434356729274,
+  "tier": "common",
+  "species": "frog",
+  "grid": "69b5c2d74266ff8d",
+  "blink": "69b5c2d74266ff8d"
+ },
+ {
+  "name": "stranger_56",
+  "normalized": "stranger_56",
+  "seed": 7215298354344542,
+  "tier": "epic",
+  "species": "bunny",
+  "grid": "0732675637df38b2",
+  "blink": "d9559869a4e8a0e8"
+ },
+ {
+  "name": "stranger_57",
+  "normalized": "stranger_57",
+  "seed": 473217069985747,
+  "tier": "common",
+  "species": "frog",
+  "grid": "69fc809fa2c00a1a",
+  "blink": "556c91dea5587eb2"
+ },
+ {
+  "name": "stranger_58",
+  "normalized": "stranger_58",
+  "seed": 5533454359054214,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "f26a8c28ba6c02b6",
+  "blink": "1fc55b89a7648d7a"
+ },
+ {
+  "name": "stranger_59",
+  "normalized": "stranger_59",
+  "seed": 8355395210834680,
+  "tier": "rare",
+  "species": "mouse",
+  "grid": "2e2c70dcfa3f0dcc",
+  "blink": "2e2c70dcfa3f0dcc"
+ },
+ {
+  "name": "stranger_60",
+  "normalized": "stranger_60",
+  "seed": 2170247183594328,
+  "tier": "common",
+  "species": "dog",
+  "grid": "7c438b69299864d7",
+  "blink": "bae891d900fc9a89"
+ },
+ {
+  "name": "stranger_61",
+  "normalized": "stranger_61",
+  "seed": 4126075972730256,
+  "tier": "rare",
+  "species": "pig",
+  "grid": "7b1a08be36ce4712",
+  "blink": "89df753c7e717650"
+ },
+ {
+  "name": "stranger_62",
+  "normalized": "stranger_62",
+  "seed": 5485501722810084,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "e1614e19a78d8a78",
+  "blink": "fac653645b87750d"
+ },
+ {
+  "name": "stranger_63",
+  "normalized": "stranger_63",
+  "seed": 6402692847590087,
+  "tier": "epic",
+  "species": "fox",
+  "grid": "cdd9194d4133d03b",
+  "blink": "ca86ca77449a3bfd"
+ },
+ {
+  "name": "stranger_64",
+  "normalized": "stranger_64",
+  "seed": 4090869766794659,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "ed409a414e579ccf",
+  "blink": "7001eb86a18a5071"
+ },
+ {
+  "name": "stranger_65",
+  "normalized": "stranger_65",
+  "seed": 7588355832874161,
+  "tier": "common",
+  "species": "cat",
+  "grid": "b4a4f4bda301603d",
+  "blink": "18e9594cdd4cdc46"
+ },
+ {
+  "name": "stranger_66",
+  "normalized": "stranger_66",
+  "seed": 7584972220071730,
+  "tier": "common",
+  "species": "pig",
+  "grid": "4742b8ab01643815",
+  "blink": "4742b8ab01643815"
+ },
+ {
+  "name": "stranger_67",
+  "normalized": "stranger_67",
+  "seed": 5559263027726754,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "f683512db12cfd0d",
+  "blink": "aa619e9ef4bf38fd"
+ },
+ {
+  "name": "stranger_68",
+  "normalized": "stranger_68",
+  "seed": 5869667456921095,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "421a7f4db148abe2",
+  "blink": "c98627a8b90f48dc"
+ },
+ {
+  "name": "stranger_69",
+  "normalized": "stranger_69",
+  "seed": 1583077106493153,
+  "tier": "common",
+  "species": "dog",
+  "grid": "2025e509e33c24c1",
+  "blink": "2025e509e33c24c1"
+ },
+ {
+  "name": "stranger_70",
+  "normalized": "stranger_70",
+  "seed": 3301906760625316,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "1441bddf27db2bb7",
+  "blink": "667ce3fb4f62b317"
+ },
+ {
+  "name": "stranger_71",
+  "normalized": "stranger_71",
+  "seed": 7923863955829523,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "9437380757558022",
+  "blink": "f482a2581676b48c"
+ },
+ {
+  "name": "stranger_72",
+  "normalized": "stranger_72",
+  "seed": 495037422499855,
+  "tier": "common",
+  "species": "frog",
+  "grid": "ba13072041f1e5ce",
+  "blink": "5bc795f1cd1220be"
+ },
+ {
+  "name": "stranger_73",
+  "normalized": "stranger_73",
+  "seed": 2346481505556160,
+  "tier": "common",
+  "species": "bear",
+  "grid": "909384052bb2b799",
+  "blink": "5ea0cbfeefb83a35"
+ },
+ {
+  "name": "stranger_74",
+  "normalized": "stranger_74",
+  "seed": 7590989384778318,
+  "tier": "common",
+  "species": "cat",
+  "grid": "43b8e35109b1e064",
+  "blink": "47ec7d846920b9dd"
+ },
+ {
+  "name": "stranger_75",
+  "normalized": "stranger_75",
+  "seed": 6553747979774821,
+  "tier": "epic",
+  "species": "fox",
+  "grid": "3265f56bedacf9b6",
+  "blink": "308bc60ae7f06623"
+ },
+ {
+  "name": "stranger_76",
+  "normalized": "stranger_76",
+  "seed": 2264857278088376,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "7d5ab144be31eb47",
+  "blink": "700778d09f30ce8d"
+ },
+ {
+  "name": "stranger_77",
+  "normalized": "stranger_77",
+  "seed": 7820849137359029,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "129e9e858e939d98",
+  "blink": "56e7f74d1542180a"
+ },
+ {
+  "name": "stranger_78",
+  "normalized": "stranger_78",
+  "seed": 872982167290083,
+  "tier": "epic",
+  "species": "bear",
+  "grid": "27a7032900b5432c",
+  "blink": "c8e9a70b10241c2d"
+ },
+ {
+  "name": "stranger_79",
+  "normalized": "stranger_79",
+  "seed": 6605544951370130,
+  "tier": "common",
+  "species": "frog",
+  "grid": "af47e16ca6ed038a",
+  "blink": "af47e16ca6ed038a"
+ },
+ {
+  "name": "stranger_80",
+  "normalized": "stranger_80",
+  "seed": 2417620012840452,
+  "tier": "rare",
+  "species": "fox",
+  "grid": "fea99e4fbb912e47",
+  "blink": "fea99e4fbb912e47"
+ },
+ {
+  "name": "stranger_81",
+  "normalized": "stranger_81",
+  "seed": 976261502521965,
+  "tier": "common",
+  "species": "frog",
+  "grid": "1f045335e8a2daa0",
+  "blink": "1f045335e8a2daa0"
+ },
+ {
+  "name": "stranger_82",
+  "normalized": "stranger_82",
+  "seed": 4123498173536505,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "239026a0f430add2",
+  "blink": "9dc03ff6cfa7c360"
+ },
+ {
+  "name": "stranger_83",
+  "normalized": "stranger_83",
+  "seed": 8254040099544512,
+  "tier": "common",
+  "species": "panda",
+  "grid": "a699ab9f1e5fb5c3",
+  "blink": "b523a19d7631aca4"
+ },
+ {
+  "name": "stranger_84",
+  "normalized": "stranger_84",
+  "seed": 2648633318538523,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "413cc1bde3feaab7",
+  "blink": "f1ee3d18c41fbb48"
+ },
+ {
+  "name": "stranger_85",
+  "normalized": "stranger_85",
+  "seed": 5789999188781865,
+  "tier": "rare",
+  "species": "cat",
+  "grid": "cbac9119a4848772",
+  "blink": "cbac9119a4848772"
+ },
+ {
+  "name": "stranger_86",
+  "normalized": "stranger_86",
+  "seed": 949164947084754,
+  "tier": "common",
+  "species": "pig",
+  "grid": "da2ec29507bd367c",
+  "blink": "1447801fe84e9cca"
+ },
+ {
+  "name": "stranger_87",
+  "normalized": "stranger_87",
+  "seed": 5146467378917833,
+  "tier": "epic",
+  "species": "dog",
+  "grid": "e5222e17715eab0f",
+  "blink": "be55cbda57dde843"
+ },
+ {
+  "name": "stranger_88",
+  "normalized": "stranger_88",
+  "seed": 2061596791579733,
+  "tier": "common",
+  "species": "dog",
+  "grid": "5c5fd3c1d205416c",
+  "blink": "15c16b7d3f8609fc"
+ },
+ {
+  "name": "stranger_89",
+  "normalized": "stranger_89",
+  "seed": 257536473300718,
+  "tier": "rare",
+  "species": "raccoon",
+  "grid": "d2a21541aa4732e2",
+  "blink": "935d5dcd3f0adaf8"
+ },
+ {
+  "name": "stranger_90",
+  "normalized": "stranger_90",
+  "seed": 573660123681382,
+  "tier": "common",
+  "species": "dog",
+  "grid": "b82a148492215775",
+  "blink": "1e601a03cecfa0c1"
+ },
+ {
+  "name": "stranger_91",
+  "normalized": "stranger_91",
+  "seed": 509893674277302,
+  "tier": "common",
+  "species": "frog",
+  "grid": "6cbde819fcf617ec",
+  "blink": "88b4c2b12ff751e7"
+ },
+ {
+  "name": "stranger_92",
+  "normalized": "stranger_92",
+  "seed": 2335815099590520,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "c54235ed194dd560",
+  "blink": "199d4f08bde2a8f7"
+ },
+ {
+  "name": "stranger_93",
+  "normalized": "stranger_93",
+  "seed": 1951114066320132,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "4efb86677f9765dd",
+  "blink": "4efb86677f9765dd"
+ },
+ {
+  "name": "stranger_94",
+  "normalized": "stranger_94",
+  "seed": 8322292594935527,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "1ce76b9153fe22ae",
+  "blink": "d2c2096b5f63ca65"
+ },
+ {
+  "name": "stranger_95",
+  "normalized": "stranger_95",
+  "seed": 7975797066905065,
+  "tier": "rare",
+  "species": "cat",
+  "grid": "23c917f81e3f45d9",
+  "blink": "23c917f81e3f45d9"
+ },
+ {
+  "name": "stranger_96",
+  "normalized": "stranger_96",
+  "seed": 7505969455721758,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "0f9260e8355a6690",
+  "blink": "721628803fdb541e"
+ },
+ {
+  "name": "stranger_97",
+  "normalized": "stranger_97",
+  "seed": 5964322983292374,
+  "tier": "common",
+  "species": "cat",
+  "grid": "5dd40904aa0d3dfc",
+  "blink": "ecdfd3251ff0e4a1"
+ },
+ {
+  "name": "stranger_98",
+  "normalized": "stranger_98",
+  "seed": 2982699185540095,
+  "tier": "epic",
+  "species": "hamster",
+  "grid": "a4a15ae0a89d2dc6",
+  "blink": "083d90e82952abc8"
+ },
+ {
+  "name": "stranger_99",
+  "normalized": "stranger_99",
+  "seed": 8144680689439946,
+  "tier": "common",
+  "species": "owl",
+  "grid": "a2705be2537a44ea",
+  "blink": "3e3e7175eab6f669"
+ },
+ {
+  "name": "stranger_100",
+  "normalized": "stranger_100",
+  "seed": 5933350671046883,
+  "tier": "common",
+  "species": "frog",
+  "grid": "af62c3d67503a5c3",
+  "blink": "af62c3d67503a5c3"
+ },
+ {
+  "name": "stranger_101",
+  "normalized": "stranger_101",
+  "seed": 3935908853125028,
+  "tier": "common",
+  "species": "fox",
+  "grid": "cadd37f1467e6717",
+  "blink": "d541ed5cbe338017"
+ },
+ {
+  "name": "stranger_102",
+  "normalized": "stranger_102",
+  "seed": 2117944141143792,
+  "tier": "common",
+  "species": "frog",
+  "grid": "694dcc862a52f2ea",
+  "blink": "2369e84a899e8353"
+ },
+ {
+  "name": "stranger_103",
+  "normalized": "stranger_103",
+  "seed": 7970472696618095,
+  "tier": "common",
+  "species": "bear",
+  "grid": "1dc0e54c5957eb60",
+  "blink": "1dc0e54c5957eb60"
+ },
+ {
+  "name": "stranger_104",
+  "normalized": "stranger_104",
+  "seed": 3687664811773035,
+  "tier": "common",
+  "species": "cat",
+  "grid": "42920eadce4031ac",
+  "blink": "42920eadce4031ac"
+ },
+ {
+  "name": "stranger_105",
+  "normalized": "stranger_105",
+  "seed": 8777794869494477,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "1584fd7e43444bac",
+  "blink": "d75908e545bd7602"
+ },
+ {
+  "name": "stranger_106",
+  "normalized": "stranger_106",
+  "seed": 8125862892424674,
+  "tier": "legendary",
+  "species": "hamster",
+  "grid": "8eba2170c948a20e",
+  "blink": "454619f3e2195f4c"
+ },
+ {
+  "name": "stranger_107",
+  "normalized": "stranger_107",
+  "seed": 7826580119803650,
+  "tier": "common",
+  "species": "owl",
+  "grid": "c81205cc0b36d1fb",
+  "blink": "c81205cc0b36d1fb"
+ },
+ {
+  "name": "stranger_108",
+  "normalized": "stranger_108",
+  "seed": 4800325905152992,
+  "tier": "rare",
+  "species": "panda",
+  "grid": "ee6266046ab230a1",
+  "blink": "62d57cace9b88487"
+ },
+ {
+  "name": "stranger_109",
+  "normalized": "stranger_109",
+  "seed": 1745299403646405,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "74d019fdfe502913",
+  "blink": "36b9bac4429772b6"
+ },
+ {
+  "name": "stranger_110",
+  "normalized": "stranger_110",
+  "seed": 1180985106733648,
+  "tier": "common",
+  "species": "bear",
+  "grid": "2b3b074f84f79b81",
+  "blink": "174fac56f305e50b"
+ },
+ {
+  "name": "stranger_111",
+  "normalized": "stranger_111",
+  "seed": 8074893645297243,
+  "tier": "common",
+  "species": "cat",
+  "grid": "a68e3e96866b7355",
+  "blink": "a68e3e96866b7355"
+ },
+ {
+  "name": "stranger_112",
+  "normalized": "stranger_112",
+  "seed": 8641986688731935,
+  "tier": "legendary",
+  "species": "bear",
+  "grid": "e27432ea88fbfdf1",
+  "blink": "e27432ea88fbfdf1"
+ },
+ {
+  "name": "stranger_113",
+  "normalized": "stranger_113",
+  "seed": 5815165969592980,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "749f0be40fe6fb0b",
+  "blink": "98bc788f4d1515f6"
+ },
+ {
+  "name": "stranger_114",
+  "normalized": "stranger_114",
+  "seed": 8712894982521774,
+  "tier": "common",
+  "species": "frog",
+  "grid": "f74f8da6112ded49",
+  "blink": "f74f8da6112ded49"
+ },
+ {
+  "name": "stranger_115",
+  "normalized": "stranger_115",
+  "seed": 4101772922925065,
+  "tier": "common",
+  "species": "frog",
+  "grid": "dab5ef0d19af7bfd",
+  "blink": "dab5ef0d19af7bfd"
+ },
+ {
+  "name": "stranger_116",
+  "normalized": "stranger_116",
+  "seed": 7683031769171644,
+  "tier": "common",
+  "species": "pig",
+  "grid": "950ded7b69dba23e",
+  "blink": "a88c3affa8acbf76"
+ },
+ {
+  "name": "stranger_117",
+  "normalized": "stranger_117",
+  "seed": 3869823278035489,
+  "tier": "rare",
+  "species": "fox",
+  "grid": "0f0935b841befbda",
+  "blink": "0f0935b841befbda"
+ },
+ {
+  "name": "stranger_118",
+  "normalized": "stranger_118",
+  "seed": 7278552403760074,
+  "tier": "common",
+  "species": "frog",
+  "grid": "a4a945e18cd60102",
+  "blink": "a4a945e18cd60102"
+ },
+ {
+  "name": "stranger_119",
+  "normalized": "stranger_119",
+  "seed": 1760611569315122,
+  "tier": "common",
+  "species": "frog",
+  "grid": "87c7cb645e550777",
+  "blink": "8e474f50cf5c572d"
+ },
+ {
+  "name": "stranger_120",
+  "normalized": "stranger_120",
+  "seed": 2864112611115285,
+  "tier": "common",
+  "species": "pig",
+  "grid": "d2a2e244498ac2fb",
+  "blink": "d2a2e244498ac2fb"
+ },
+ {
+  "name": "stranger_121",
+  "normalized": "stranger_121",
+  "seed": 1175896020657011,
+  "tier": "common",
+  "species": "dog",
+  "grid": "4f20aea4aef80c88",
+  "blink": "4f20aea4aef80c88"
+ },
+ {
+  "name": "stranger_122",
+  "normalized": "stranger_122",
+  "seed": 1903166996584008,
+  "tier": "rare",
+  "species": "raccoon",
+  "grid": "f53683bb209b88ef",
+  "blink": "da61f240f14d4428"
+ },
+ {
+  "name": "stranger_123",
+  "normalized": "stranger_123",
+  "seed": 6460369810545568,
+  "tier": "common",
+  "species": "dog",
+  "grid": "aa2b11a930786f7a",
+  "blink": "aa2b11a930786f7a"
+ },
+ {
+  "name": "stranger_124",
+  "normalized": "stranger_124",
+  "seed": 503844383695939,
+  "tier": "rare",
+  "species": "bear",
+  "grid": "e53bb9b4a2dea963",
+  "blink": "e53bb9b4a2dea963"
+ },
+ {
+  "name": "stranger_125",
+  "normalized": "stranger_125",
+  "seed": 6329060269554257,
+  "tier": "rare",
+  "species": "owl",
+  "grid": "c8ce4b959b95c245",
+  "blink": "80d4ca45c48b5a05"
+ },
+ {
+  "name": "stranger_126",
+  "normalized": "stranger_126",
+  "seed": 4053233431214951,
+  "tier": "rare",
+  "species": "frog",
+  "grid": "58b5759bce6bfb0d",
+  "blink": "58b5759bce6bfb0d"
+ },
+ {
+  "name": "stranger_127",
+  "normalized": "stranger_127",
+  "seed": 8011616209070146,
+  "tier": "rare",
+  "species": "panda",
+  "grid": "206cda1c38c46cd9",
+  "blink": "167cb65d8eb97b0c"
+ },
+ {
+  "name": "stranger_128",
+  "normalized": "stranger_128",
+  "seed": 1617023625992501,
+  "tier": "rare",
+  "species": "bunny",
+  "grid": "346e80856fa176f1",
+  "blink": "1977327098c1bdc9"
+ },
+ {
+  "name": "stranger_129",
+  "normalized": "stranger_129",
+  "seed": 3864354317662640,
+  "tier": "common",
+  "species": "panda",
+  "grid": "21c2c078eb9b3f0e",
+  "blink": "88993d0017418c5c"
+ },
+ {
+  "name": "stranger_130",
+  "normalized": "stranger_130",
+  "seed": 3045320882104324,
+  "tier": "common",
+  "species": "bear",
+  "grid": "d783561b01a17c34",
+  "blink": "4700d68969532bf8"
+ },
+ {
+  "name": "stranger_131",
+  "normalized": "stranger_131",
+  "seed": 6195949040708387,
+  "tier": "common",
+  "species": "capybara",
+  "grid": "1c65d527a81fe430",
+  "blink": "bda63fe4ec2be385"
+ },
+ {
+  "name": "stranger_132",
+  "normalized": "stranger_132",
+  "seed": 7182586138819161,
+  "tier": "legendary",
+  "species": "bunny",
+  "grid": "bc59e4bfe6265e92",
+  "blink": "bc59e4bfe6265e92"
+ },
+ {
+  "name": "stranger_133",
+  "normalized": "stranger_133",
+  "seed": 1489073782592570,
+  "tier": "common",
+  "species": "cat",
+  "grid": "d02a0cf1e0a07d5d",
+  "blink": "55e32826521f27b1"
+ },
+ {
+  "name": "stranger_134",
+  "normalized": "stranger_134",
+  "seed": 2148064206737183,
+  "tier": "common",
+  "species": "axolotl",
+  "grid": "90fcdcdaa7418570",
+  "blink": "30b3bce7b771754f"
+ },
+ {
+  "name": "stranger_135",
+  "normalized": "stranger_135",
+  "seed": 3919256716408346,
+  "tier": "common",
+  "species": "bear",
+  "grid": "0aedc187115cc3d1",
+  "blink": "0aedc187115cc3d1"
+ },
+ {
+  "name": "stranger_136",
+  "normalized": "stranger_136",
+  "seed": 5428500195779142,
+  "tier": "common",
+  "species": "frog",
+  "grid": "8d6a5fc9a97a7900",
+  "blink": "8d6a5fc9a97a7900"
+ },
+ {
+  "name": "stranger_137",
+  "normalized": "stranger_137",
+  "seed": 1547587059854907,
+  "tier": "rare",
+  "species": "raccoon",
+  "grid": "ca4777a92711ab3d",
+  "blink": "a137a5ffed8f41f9"
+ },
+ {
+  "name": "stranger_138",
+  "normalized": "stranger_138",
+  "seed": 2720590900818115,
+  "tier": "common",
+  "species": "dog",
+  "grid": "230ffad9493b66e6",
+  "blink": "4abf23fc0c265f68"
+ },
+ {
+  "name": "stranger_139",
+  "normalized": "stranger_139",
+  "seed": 5694282220921276,
+  "tier": "common",
+  "species": "owl",
+  "grid": "70750939530c608c",
+  "blink": "70750939530c608c"
+ },
+ {
+  "name": "stranger_140",
+  "normalized": "stranger_140",
+  "seed": 145532094702009,
+  "tier": "common",
+  "species": "frog",
+  "grid": "8ac808bb22dd3234",
+  "blink": "17a86704a1ba0ab2"
+ },
+ {
+  "name": "stranger_141",
+  "normalized": "stranger_141",
+  "seed": 7842609953387544,
+  "tier": "common",
+  "species": "owl",
+  "grid": "ae76746111b400a6",
+  "blink": "352b5c7b3430d6ff"
+ },
+ {
+  "name": "stranger_142",
+  "normalized": "stranger_142",
+  "seed": 3247165701964092,
+  "tier": "rare",
+  "species": "panda",
+  "grid": "8cd07065b3a7dd1b",
+  "blink": "2d70a7a4b8534018"
+ },
+ {
+  "name": "stranger_143",
+  "normalized": "stranger_143",
+  "seed": 1169790033986789,
+  "tier": "common",
+  "species": "owl",
+  "grid": "111c8098834749bd",
+  "blink": "3bcdc18ee2a42752"
+ },
+ {
+  "name": "stranger_144",
+  "normalized": "stranger_144",
+  "seed": 2264892236559639,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "66e68fd8dff1ee6a",
+  "blink": "7484f1f1a6577290"
+ },
+ {
+  "name": "stranger_145",
+  "normalized": "stranger_145",
+  "seed": 3609273759499593,
+  "tier": "common",
+  "species": "bear",
+  "grid": "dcfb3071cdecedbc",
+  "blink": "f36975e99bfdc00d"
+ },
+ {
+  "name": "stranger_146",
+  "normalized": "stranger_146",
+  "seed": 6891218776795539,
+  "tier": "common",
+  "species": "dog",
+  "grid": "70240b4f71059929",
+  "blink": "f78a9a44cd190cf8"
+ },
+ {
+  "name": "stranger_147",
+  "normalized": "stranger_147",
+  "seed": 5440202278278516,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "34411472ba929f64",
+  "blink": "34411472ba929f64"
+ },
+ {
+  "name": "stranger_148",
+  "normalized": "stranger_148",
+  "seed": 8908089417399574,
+  "tier": "common",
+  "species": "frog",
+  "grid": "dd17f5cbacc1cad3",
+  "blink": "dd17f5cbacc1cad3"
+ },
+ {
+  "name": "stranger_149",
+  "normalized": "stranger_149",
+  "seed": 1604691938734449,
+  "tier": "rare",
+  "species": "frog",
+  "grid": "6148e5c61a679535",
+  "blink": "6148e5c61a679535"
+ },
+ {
+  "name": "stranger_150",
+  "normalized": "stranger_150",
+  "seed": 5047733392501855,
+  "tier": "rare",
+  "species": "panda",
+  "grid": "7d9a3ed3fb6d14cc",
+  "blink": "7d9a3ed3fb6d14cc"
+ },
+ {
+  "name": "stranger_151",
+  "normalized": "stranger_151",
+  "seed": 6820608637683157,
+  "tier": "common",
+  "species": "cat",
+  "grid": "5bab1cd9b967c633",
+  "blink": "272b0eec1cb7205e"
+ },
+ {
+  "name": "stranger_152",
+  "normalized": "stranger_152",
+  "seed": 8691811520584252,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "86f1c07640abf62a",
+  "blink": "128dd8ff6dd3fb9b"
+ },
+ {
+  "name": "stranger_153",
+  "normalized": "stranger_153",
+  "seed": 1787578446048848,
+  "tier": "common",
+  "species": "fox",
+  "grid": "766b011ab2276509",
+  "blink": "766b011ab2276509"
+ },
+ {
+  "name": "stranger_154",
+  "normalized": "stranger_154",
+  "seed": 5689664071136541,
+  "tier": "epic",
+  "species": "panda",
+  "grid": "986477f703372621",
+  "blink": "ef38fb4f5fba8133"
+ },
+ {
+  "name": "stranger_155",
+  "normalized": "stranger_155",
+  "seed": 2488795731564280,
+  "tier": "common",
+  "species": "bear",
+  "grid": "4c98bdcf03c3b567",
+  "blink": "e99e6d1622ed4d77"
+ },
+ {
+  "name": "stranger_156",
+  "normalized": "stranger_156",
+  "seed": 3848332928398238,
+  "tier": "rare",
+  "species": "cat",
+  "grid": "6042324688828530",
+  "blink": "a28b686ef9a0e514"
+ },
+ {
+  "name": "stranger_157",
+  "normalized": "stranger_157",
+  "seed": 2201340971115398,
+  "tier": "legendary",
+  "species": "raccoon",
+  "grid": "1d92f3f5ea4f8b70",
+  "blink": "1d92f3f5ea4f8b70"
+ },
+ {
+  "name": "stranger_158",
+  "normalized": "stranger_158",
+  "seed": 1470459442058814,
+  "tier": "legendary",
+  "species": "capybara",
+  "grid": "abbb8422cb992cc6",
+  "blink": "abbb8422cb992cc6"
+ },
+ {
+  "name": "stranger_159",
+  "normalized": "stranger_159",
+  "seed": 2736248457665678,
+  "tier": "common",
+  "species": "cat",
+  "grid": "acae5ff8060a2de2",
+  "blink": "acae5ff8060a2de2"
+ },
+ {
+  "name": "stranger_160",
+  "normalized": "stranger_160",
+  "seed": 530858952066386,
+  "tier": "common",
+  "species": "cat",
+  "grid": "2a5541862394c47d",
+  "blink": "f50725b2f5b45966"
+ },
+ {
+  "name": "stranger_161",
+  "normalized": "stranger_161",
+  "seed": 6088079604045983,
+  "tier": "rare",
+  "species": "bunny",
+  "grid": "e2a96f868c00b070",
+  "blink": "0cdaa8bc33f4e148"
+ },
+ {
+  "name": "stranger_162",
+  "normalized": "stranger_162",
+  "seed": 2806840678643214,
+  "tier": "common",
+  "species": "fox",
+  "grid": "2770a444e8b649d7",
+  "blink": "2770a444e8b649d7"
+ },
+ {
+  "name": "stranger_163",
+  "normalized": "stranger_163",
+  "seed": 3888074977398526,
+  "tier": "epic",
+  "species": "panda",
+  "grid": "ccd6cc42ad4f778f",
+  "blink": "6197cadf77f74dc7"
+ },
+ {
+  "name": "stranger_164",
+  "normalized": "stranger_164",
+  "seed": 6726462481850445,
+  "tier": "common",
+  "species": "panda",
+  "grid": "db92cdc7f9078969",
+  "blink": "5511306570e6a8c5"
+ },
+ {
+  "name": "stranger_165",
+  "normalized": "stranger_165",
+  "seed": 1901281205607394,
+  "tier": "common",
+  "species": "dog",
+  "grid": "28628415fcb4ba64",
+  "blink": "5353f746248151cb"
+ },
+ {
+  "name": "stranger_166",
+  "normalized": "stranger_166",
+  "seed": 2685969352443864,
+  "tier": "common",
+  "species": "frog",
+  "grid": "af92d70e2c3d2694",
+  "blink": "af92d70e2c3d2694"
+ },
+ {
+  "name": "stranger_167",
+  "normalized": "stranger_167",
+  "seed": 8521270195592115,
+  "tier": "rare",
+  "species": "bear",
+  "grid": "c684354073be1fd8",
+  "blink": "96c0f3515b4fbb1e"
+ },
+ {
+  "name": "stranger_168",
+  "normalized": "stranger_168",
+  "seed": 3304800185339707,
+  "tier": "common",
+  "species": "frog",
+  "grid": "9c4806fad3d29b32",
+  "blink": "693d2b6d869031d4"
+ },
+ {
+  "name": "stranger_169",
+  "normalized": "stranger_169",
+  "seed": 7066086823709189,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "ea2b30829457ee8a",
+  "blink": "ea2b30829457ee8a"
+ },
+ {
+  "name": "stranger_170",
+  "normalized": "stranger_170",
+  "seed": 4129185530868460,
+  "tier": "common",
+  "species": "pig",
+  "grid": "fb6313d82f9ce844",
+  "blink": "fb6313d82f9ce844"
+ },
+ {
+  "name": "stranger_171",
+  "normalized": "stranger_171",
+  "seed": 3938589966475900,
+  "tier": "common",
+  "species": "dog",
+  "grid": "092c7d58be6a3bb5",
+  "blink": "1ab5298b098b33c5"
+ },
+ {
+  "name": "stranger_172",
+  "normalized": "stranger_172",
+  "seed": 3468143314629075,
+  "tier": "common",
+  "species": "panda",
+  "grid": "90c6401ae14d2c14",
+  "blink": "204276e1092a8fc3"
+ },
+ {
+  "name": "stranger_173",
+  "normalized": "stranger_173",
+  "seed": 2631443588058618,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "5d245b906d914051",
+  "blink": "5d245b906d914051"
+ },
+ {
+  "name": "stranger_174",
+  "normalized": "stranger_174",
+  "seed": 8793608426276025,
+  "tier": "common",
+  "species": "panda",
+  "grid": "c276453dfc6247c7",
+  "blink": "e2220cfd1dfd454a"
+ },
+ {
+  "name": "stranger_175",
+  "normalized": "stranger_175",
+  "seed": 31535454537475,
+  "tier": "common",
+  "species": "bear",
+  "grid": "39148314abe63575",
+  "blink": "682c82c74b0a3b05"
+ },
+ {
+  "name": "stranger_176",
+  "normalized": "stranger_176",
+  "seed": 1543768548322388,
+  "tier": "common",
+  "species": "dog",
+  "grid": "7a24be0d4d16e3e6",
+  "blink": "75cae41fe8c56989"
+ },
+ {
+  "name": "stranger_177",
+  "normalized": "stranger_177",
+  "seed": 5843474409953760,
+  "tier": "rare",
+  "species": "bear",
+  "grid": "d830fb28b79beeb2",
+  "blink": "d830fb28b79beeb2"
+ },
+ {
+  "name": "stranger_178",
+  "normalized": "stranger_178",
+  "seed": 5721380931434581,
+  "tier": "common",
+  "species": "frog",
+  "grid": "06d24340f430ed46",
+  "blink": "81d10fb698958c73"
+ },
+ {
+  "name": "stranger_179",
+  "normalized": "stranger_179",
+  "seed": 8043169809379355,
+  "tier": "common",
+  "species": "bear",
+  "grid": "04b0703b73734ef3",
+  "blink": "375b7dd210748206"
+ },
+ {
+  "name": "stranger_180",
+  "normalized": "stranger_180",
+  "seed": 2152790999621680,
+  "tier": "common",
+  "species": "pig",
+  "grid": "7b6d6a1bf257740d",
+  "blink": "5fbf4021e789cdf3"
+ },
+ {
+  "name": "stranger_181",
+  "normalized": "stranger_181",
+  "seed": 7548273871980728,
+  "tier": "rare",
+  "species": "bear",
+  "grid": "9f58e05db5affa76",
+  "blink": "f49bc62b874387fd"
+ },
+ {
+  "name": "stranger_182",
+  "normalized": "stranger_182",
+  "seed": 2738121253684829,
+  "tier": "common",
+  "species": "dog",
+  "grid": "9d37a18c86fe2047",
+  "blink": "9d37a18c86fe2047"
+ },
+ {
+  "name": "stranger_183",
+  "normalized": "stranger_183",
+  "seed": 429559785291391,
+  "tier": "common",
+  "species": "owl",
+  "grid": "71e10c7d6d10a2bd",
+  "blink": "71e10c7d6d10a2bd"
+ },
+ {
+  "name": "stranger_184",
+  "normalized": "stranger_184",
+  "seed": 115548910988875,
+  "tier": "rare",
+  "species": "axolotl",
+  "grid": "1f79cffa3d38571f",
+  "blink": "5c07e55452eb52af"
+ },
+ {
+  "name": "stranger_185",
+  "normalized": "stranger_185",
+  "seed": 7777334962259102,
+  "tier": "rare",
+  "species": "bear",
+  "grid": "0eda2dc08b3d456a",
+  "blink": "240def5d818a702b"
+ },
+ {
+  "name": "stranger_186",
+  "normalized": "stranger_186",
+  "seed": 2528211389832839,
+  "tier": "common",
+  "species": "fox",
+  "grid": "9e61187047c077eb",
+  "blink": "9e61187047c077eb"
+ },
+ {
+  "name": "stranger_187",
+  "normalized": "stranger_187",
+  "seed": 7689738863766417,
+  "tier": "epic",
+  "species": "cat",
+  "grid": "59adce5caacecaa0",
+  "blink": "7a715b8bf0793870"
+ },
+ {
+  "name": "stranger_188",
+  "normalized": "stranger_188",
+  "seed": 4419170660686241,
+  "tier": "common",
+  "species": "bear",
+  "grid": "03e7dadf09e0839a",
+  "blink": "03e7dadf09e0839a"
+ },
+ {
+  "name": "stranger_189",
+  "normalized": "stranger_189",
+  "seed": 8190977807323832,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "5f4fc979a2a3bb21",
+  "blink": "5f4fc979a2a3bb21"
+ },
+ {
+  "name": "stranger_190",
+  "normalized": "stranger_190",
+  "seed": 753973802246650,
+  "tier": "rare",
+  "species": "capybara",
+  "grid": "154db28e58359b20",
+  "blink": "154db28e58359b20"
+ },
+ {
+  "name": "stranger_191",
+  "normalized": "stranger_191",
+  "seed": 2243678410200194,
+  "tier": "common",
+  "species": "axolotl",
+  "grid": "6f2b67b104270a1b",
+  "blink": "2f6db19d12649d39"
+ },
+ {
+  "name": "stranger_192",
+  "normalized": "stranger_192",
+  "seed": 2435935535998493,
+  "tier": "common",
+  "species": "fox",
+  "grid": "77da334d085bf982",
+  "blink": "77da334d085bf982"
+ },
+ {
+  "name": "stranger_193",
+  "normalized": "stranger_193",
+  "seed": 7340475235109107,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "375edc2531bed703",
+  "blink": "85f8b97f24220413"
+ },
+ {
+  "name": "stranger_194",
+  "normalized": "stranger_194",
+  "seed": 4902865103595573,
+  "tier": "common",
+  "species": "owl",
+  "grid": "2934e6ff2d360612",
+  "blink": "2934e6ff2d360612"
+ },
+ {
+  "name": "stranger_195",
+  "normalized": "stranger_195",
+  "seed": 8575845533412395,
+  "tier": "rare",
+  "species": "dog",
+  "grid": "7fe2cfa6a72d0753",
+  "blink": "31060f09851b75c7"
+ },
+ {
+  "name": "stranger_196",
+  "normalized": "stranger_196",
+  "seed": 6563929877087802,
+  "tier": "common",
+  "species": "panda",
+  "grid": "383eec5c383317ea",
+  "blink": "aadba0ce76006284"
+ },
+ {
+  "name": "stranger_197",
+  "normalized": "stranger_197",
+  "seed": 8967953197462522,
+  "tier": "common",
+  "species": "dog",
+  "grid": "c638e78f2ea0fd8b",
+  "blink": "5b5b6760276f1c63"
+ },
+ {
+  "name": "stranger_198",
+  "normalized": "stranger_198",
+  "seed": 1733616710703035,
+  "tier": "common",
+  "species": "bear",
+  "grid": "9c4783201b6b627e",
+  "blink": "d2104218f7f51ee3"
+ },
+ {
+  "name": "stranger_199",
+  "normalized": "stranger_199",
+  "seed": 5518248972504557,
+  "tier": "rare",
+  "species": "cat",
+  "grid": "d6230a8a6cc0eb8e",
+  "blink": "d6230a8a6cc0eb8e"
+ },
+ {
+  "name": "stranger_200",
+  "normalized": "stranger_200",
+  "seed": 6887353311413263,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "aa953d2775e24e0e",
+  "blink": "724118a87113e0a7"
+ },
+ {
+  "name": "stranger_201",
+  "normalized": "stranger_201",
+  "seed": 7232351296139249,
+  "tier": "epic",
+  "species": "raccoon",
+  "grid": "c945620a33bbd7ff",
+  "blink": "cec7bffa53d91362"
+ },
+ {
+  "name": "stranger_202",
+  "normalized": "stranger_202",
+  "seed": 3350671341625876,
+  "tier": "common",
+  "species": "axolotl",
+  "grid": "a85806d14595f1e5",
+  "blink": "a85806d14595f1e5"
+ },
+ {
+  "name": "stranger_203",
+  "normalized": "stranger_203",
+  "seed": 5840998704881105,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "fc1bd7200b7cb1c1",
+  "blink": "bec0ae8c0f419535"
+ },
+ {
+  "name": "stranger_204",
+  "normalized": "stranger_204",
+  "seed": 356223676399703,
+  "tier": "rare",
+  "species": "cat",
+  "grid": "5db23cd0452c853e",
+  "blink": "56e3ca99d9e58095"
+ },
+ {
+  "name": "stranger_205",
+  "normalized": "stranger_205",
+  "seed": 6914975483028690,
+  "tier": "legendary",
+  "species": "owl",
+  "grid": "da421fdcd8a47cad",
+  "blink": "4fca5444f323f879"
+ },
+ {
+  "name": "stranger_206",
+  "normalized": "stranger_206",
+  "seed": 1820850312726838,
+  "tier": "common",
+  "species": "owl",
+  "grid": "8dd792e1c62bdd92",
+  "blink": "74d9231895506f18"
+ },
+ {
+  "name": "stranger_207",
+  "normalized": "stranger_207",
+  "seed": 918630376518123,
+  "tier": "common",
+  "species": "fox",
+  "grid": "de5025d616806f55",
+  "blink": "de5025d616806f55"
+ },
+ {
+  "name": "stranger_208",
+  "normalized": "stranger_208",
+  "seed": 1565994208161028,
+  "tier": "common",
+  "species": "panda",
+  "grid": "3a9f44226f02a286",
+  "blink": "9107d7f0ac12aec6"
+ },
+ {
+  "name": "stranger_209",
+  "normalized": "stranger_209",
+  "seed": 6479885095659336,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "1e0930f119d4d613",
+  "blink": "3b218dcf349aeb74"
+ },
+ {
+  "name": "stranger_210",
+  "normalized": "stranger_210",
+  "seed": 3732976933117109,
+  "tier": "common",
+  "species": "bear",
+  "grid": "c47d19bd454bdb90",
+  "blink": "b069f3addab8087d"
+ },
+ {
+  "name": "stranger_211",
+  "normalized": "stranger_211",
+  "seed": 7274694678279531,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "f9750e4ffa42ef68",
+  "blink": "d15ecd97ede20681"
+ },
+ {
+  "name": "stranger_212",
+  "normalized": "stranger_212",
+  "seed": 71256060821186,
+  "tier": "common",
+  "species": "dog",
+  "grid": "5c798bad4c08d6f7",
+  "blink": "01e40272aa60bf77"
+ },
+ {
+  "name": "stranger_213",
+  "normalized": "stranger_213",
+  "seed": 2215404340214771,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "083b82cea1aabac3",
+  "blink": "e61d332044515aad"
+ },
+ {
+  "name": "stranger_214",
+  "normalized": "stranger_214",
+  "seed": 5563228235280723,
+  "tier": "common",
+  "species": "cat",
+  "grid": "de0a94605d23901e",
+  "blink": "3f67d61e70e1cb7d"
+ },
+ {
+  "name": "stranger_215",
+  "normalized": "stranger_215",
+  "seed": 7936061729466893,
+  "tier": "epic",
+  "species": "bear",
+  "grid": "972a7a3edf35f0bc",
+  "blink": "75cd012aa283100b"
+ },
+ {
+  "name": "stranger_216",
+  "normalized": "stranger_216",
+  "seed": 8744843451435874,
+  "tier": "epic",
+  "species": "hamster",
+  "grid": "86978760e84882af",
+  "blink": "67c5044228628a26"
+ },
+ {
+  "name": "stranger_217",
+  "normalized": "stranger_217",
+  "seed": 3519400574008514,
+  "tier": "common",
+  "species": "panda",
+  "grid": "bce8d8c25a464154",
+  "blink": "dac856249ea3a3b4"
+ },
+ {
+  "name": "stranger_218",
+  "normalized": "stranger_218",
+  "seed": 2321802084722026,
+  "tier": "epic",
+  "species": "axolotl",
+  "grid": "6822df747808cba0",
+  "blink": "7529f5c5d721c2c3"
+ },
+ {
+  "name": "stranger_219",
+  "normalized": "stranger_219",
+  "seed": 6449126424612601,
+  "tier": "common",
+  "species": "dog",
+  "grid": "88ac162b4b3ef465",
+  "blink": "a4d1e1c0cb985c23"
+ },
+ {
+  "name": "stranger_220",
+  "normalized": "stranger_220",
+  "seed": 5717235144097820,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "42153de1a6e39c56",
+  "blink": "42153de1a6e39c56"
+ },
+ {
+  "name": "stranger_221",
+  "normalized": "stranger_221",
+  "seed": 4646456395655640,
+  "tier": "common",
+  "species": "frog",
+  "grid": "a93fd5c5bb5a832c",
+  "blink": "c6d08b92f55fc41e"
+ },
+ {
+  "name": "stranger_222",
+  "normalized": "stranger_222",
+  "seed": 7622468128725361,
+  "tier": "common",
+  "species": "cat",
+  "grid": "772de37e0cab7aa2",
+  "blink": "772de37e0cab7aa2"
+ },
+ {
+  "name": "stranger_223",
+  "normalized": "stranger_223",
+  "seed": 5826980372855551,
+  "tier": "common",
+  "species": "bear",
+  "grid": "152e4cd07811a3b1",
+  "blink": "38c97054a02089db"
+ },
+ {
+  "name": "stranger_224",
+  "normalized": "stranger_224",
+  "seed": 2093139670767858,
+  "tier": "common",
+  "species": "capybara",
+  "grid": "7e0df3013d01ebc2",
+  "blink": "7e0df3013d01ebc2"
+ },
+ {
+  "name": "stranger_225",
+  "normalized": "stranger_225",
+  "seed": 6280437250560081,
+  "tier": "common",
+  "species": "cat",
+  "grid": "4c8944f7697d6eb6",
+  "blink": "bd20c224b8334cec"
+ },
+ {
+  "name": "stranger_226",
+  "normalized": "stranger_226",
+  "seed": 4809267696738042,
+  "tier": "epic",
+  "species": "mouse",
+  "grid": "ee581d5e30f99284",
+  "blink": "8809a9dc3e037ae0"
+ },
+ {
+  "name": "stranger_227",
+  "normalized": "stranger_227",
+  "seed": 3820077637983466,
+  "tier": "common",
+  "species": "capybara",
+  "grid": "093286bb08adc291",
+  "blink": "093286bb08adc291"
+ },
+ {
+  "name": "stranger_228",
+  "normalized": "stranger_228",
+  "seed": 5339291903058943,
+  "tier": "common",
+  "species": "bear",
+  "grid": "acd415cfe36d79a8",
+  "blink": "09b08bf5106c831c"
+ },
+ {
+  "name": "stranger_229",
+  "normalized": "stranger_229",
+  "seed": 7971738345004457,
+  "tier": "common",
+  "species": "frog",
+  "grid": "e976de19b614af8b",
+  "blink": "e976de19b614af8b"
+ },
+ {
+  "name": "stranger_230",
+  "normalized": "stranger_230",
+  "seed": 5265205916370862,
+  "tier": "common",
+  "species": "frog",
+  "grid": "30e0bf84886c34e4",
+  "blink": "30e0bf84886c34e4"
+ },
+ {
+  "name": "stranger_231",
+  "normalized": "stranger_231",
+  "seed": 4155077170710985,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "5af403441eff7ba6",
+  "blink": "73689c059fa77124"
+ },
+ {
+  "name": "stranger_232",
+  "normalized": "stranger_232",
+  "seed": 2107062633059856,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "4efa4b0530db79c0",
+  "blink": "3d785eac52863f11"
+ },
+ {
+  "name": "stranger_233",
+  "normalized": "stranger_233",
+  "seed": 6990260230196737,
+  "tier": "common",
+  "species": "axolotl",
+  "grid": "1802dbc170df09e1",
+  "blink": "1802dbc170df09e1"
+ },
+ {
+  "name": "stranger_234",
+  "normalized": "stranger_234",
+  "seed": 2143543121184735,
+  "tier": "epic",
+  "species": "owl",
+  "grid": "3af46755a6c02f2a",
+  "blink": "3af46755a6c02f2a"
+ },
+ {
+  "name": "stranger_235",
+  "normalized": "stranger_235",
+  "seed": 1329541038120010,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "e8a72842d1e90760",
+  "blink": "f0a7ade1bbce675f"
+ },
+ {
+  "name": "stranger_236",
+  "normalized": "stranger_236",
+  "seed": 5059404338287862,
+  "tier": "common",
+  "species": "cat",
+  "grid": "d503c91c5fe201f6",
+  "blink": "d503c91c5fe201f6"
+ },
+ {
+  "name": "stranger_237",
+  "normalized": "stranger_237",
+  "seed": 4152461798471803,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "d2103898e61f1100",
+  "blink": "c5c7caa9154f5509"
+ },
+ {
+  "name": "stranger_238",
+  "normalized": "stranger_238",
+  "seed": 5336337087470121,
+  "tier": "common",
+  "species": "frog",
+  "grid": "25e02b990f829055",
+  "blink": "2ec6724c0e0041cd"
+ },
+ {
+  "name": "stranger_239",
+  "normalized": "stranger_239",
+  "seed": 2989656438089379,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "1b48390a5fd37228",
+  "blink": "eebf382639f20e56"
+ },
+ {
+  "name": "stranger_240",
+  "normalized": "stranger_240",
+  "seed": 1634983238142047,
+  "tier": "common",
+  "species": "pig",
+  "grid": "9f7556c47ca64fdf",
+  "blink": "ce0eded32ff389d8"
+ },
+ {
+  "name": "stranger_241",
+  "normalized": "stranger_241",
+  "seed": 3182103086676426,
+  "tier": "common",
+  "species": "frog",
+  "grid": "db10de33536c540d",
+  "blink": "db10de33536c540d"
+ },
+ {
+  "name": "stranger_242",
+  "normalized": "stranger_242",
+  "seed": 2418890695573923,
+  "tier": "common",
+  "species": "owl",
+  "grid": "f396708975555d31",
+  "blink": "f396708975555d31"
+ },
+ {
+  "name": "stranger_243",
+  "normalized": "stranger_243",
+  "seed": 8263232054821121,
+  "tier": "common",
+  "species": "cat",
+  "grid": "5dde7623d2810b8b",
+  "blink": "270e8b8da14b1cb3"
+ },
+ {
+  "name": "stranger_244",
+  "normalized": "stranger_244",
+  "seed": 7542356876300465,
+  "tier": "epic",
+  "species": "frog",
+  "grid": "a0ccb3d1a97f3233",
+  "blink": "a0ccb3d1a97f3233"
+ },
+ {
+  "name": "stranger_245",
+  "normalized": "stranger_245",
+  "seed": 1588716745364175,
+  "tier": "epic",
+  "species": "bunny",
+  "grid": "05e6449402ff8e37",
+  "blink": "5bd0b76569c8da59"
+ },
+ {
+  "name": "stranger_246",
+  "normalized": "stranger_246",
+  "seed": 3165297143256620,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "13c5e39dd7d9e7c8",
+  "blink": "103c6c34daeaf2f3"
+ },
+ {
+  "name": "stranger_247",
+  "normalized": "stranger_247",
+  "seed": 4369954907097704,
+  "tier": "rare",
+  "species": "dog",
+  "grid": "f65f8614324ebf86",
+  "blink": "f65f8614324ebf86"
+ },
+ {
+  "name": "stranger_248",
+  "normalized": "stranger_248",
+  "seed": 897870724274737,
+  "tier": "rare",
+  "species": "cat",
+  "grid": "e298860727fc67d4",
+  "blink": "e298860727fc67d4"
+ },
+ {
+  "name": "stranger_249",
+  "normalized": "stranger_249",
+  "seed": 7673683736168747,
+  "tier": "epic",
+  "species": "hamster",
+  "grid": "41a4636fa2341076",
+  "blink": "2f08412dc1cd6a92"
+ },
+ {
+  "name": "stranger_250",
+  "normalized": "stranger_250",
+  "seed": 5933969562090743,
+  "tier": "common",
+  "species": "cat",
+  "grid": "83b084405a4a358c",
+  "blink": "ab875a5387f20ba4"
+ },
+ {
+  "name": "stranger_251",
+  "normalized": "stranger_251",
+  "seed": 3793241751292472,
+  "tier": "common",
+  "species": "bear",
+  "grid": "945e8ec2b1b3b933",
+  "blink": "33a11ffc1358c4e3"
+ },
+ {
+  "name": "stranger_252",
+  "normalized": "stranger_252",
+  "seed": 1094130691031262,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "18f33c6efe8a2902",
+  "blink": "d39be8bfe3e712bb"
+ },
+ {
+  "name": "stranger_253",
+  "normalized": "stranger_253",
+  "seed": 1594096100757221,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "afd744bc23fe854a",
+  "blink": "07cfa1d5f374475e"
+ },
+ {
+  "name": "stranger_254",
+  "normalized": "stranger_254",
+  "seed": 5103004371220452,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "4227a62daa3ec4f3",
+  "blink": "a92f992ad980b21a"
+ },
+ {
+  "name": "stranger_255",
+  "normalized": "stranger_255",
+  "seed": 6263254472726013,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "e02d131dc6a14aba",
+  "blink": "6b494829961099a9"
+ },
+ {
+  "name": "stranger_256",
+  "normalized": "stranger_256",
+  "seed": 7926548183441889,
+  "tier": "common",
+  "species": "axolotl",
+  "grid": "b522ce5b03e07159",
+  "blink": "c633388f2044fd7e"
+ },
+ {
+  "name": "stranger_257",
+  "normalized": "stranger_257",
+  "seed": 2669291014848016,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "4c426aade8cea9d0",
+  "blink": "44aab460076e63ee"
+ },
+ {
+  "name": "stranger_258",
+  "normalized": "stranger_258",
+  "seed": 3233893975837512,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "7a6f2b25c4987b3c",
+  "blink": "42051189d414d292"
+ },
+ {
+  "name": "stranger_259",
+  "normalized": "stranger_259",
+  "seed": 4329990300040372,
+  "tier": "rare",
+  "species": "hamster",
+  "grid": "fede84dced467f77",
+  "blink": "5e9999df4de3e8ce"
+ },
+ {
+  "name": "stranger_260",
+  "normalized": "stranger_260",
+  "seed": 5266471733410989,
+  "tier": "rare",
+  "species": "mouse",
+  "grid": "599efeb97ff71d6d",
+  "blink": "975f9d8489f6112c"
+ },
+ {
+  "name": "stranger_261",
+  "normalized": "stranger_261",
+  "seed": 5727133141695759,
+  "tier": "common",
+  "species": "pig",
+  "grid": "2ed8f45ab4714d16",
+  "blink": "1de4f8419e21735b"
+ },
+ {
+  "name": "stranger_262",
+  "normalized": "stranger_262",
+  "seed": 6575028519017917,
+  "tier": "common",
+  "species": "panda",
+  "grid": "72ef3ee516b8ca80",
+  "blink": "f4c73fc955f211b1"
+ },
+ {
+  "name": "stranger_263",
+  "normalized": "stranger_263",
+  "seed": 7216901397151363,
+  "tier": "common",
+  "species": "bear",
+  "grid": "4765f1cb6302a83f",
+  "blink": "b9845e69552a02ae"
+ },
+ {
+  "name": "stranger_264",
+  "normalized": "stranger_264",
+  "seed": 4940009387354108,
+  "tier": "common",
+  "species": "frog",
+  "grid": "e95ca3148e03159c",
+  "blink": "e95ca3148e03159c"
+ },
+ {
+  "name": "stranger_265",
+  "normalized": "stranger_265",
+  "seed": 4738698733008772,
+  "tier": "common",
+  "species": "frog",
+  "grid": "d281aa912a3a47ff",
+  "blink": "d281aa912a3a47ff"
+ },
+ {
+  "name": "stranger_266",
+  "normalized": "stranger_266",
+  "seed": 3689680535179731,
+  "tier": "common",
+  "species": "frog",
+  "grid": "c6b485375ab1458e",
+  "blink": "c6b485375ab1458e"
+ },
+ {
+  "name": "stranger_267",
+  "normalized": "stranger_267",
+  "seed": 2789969556023153,
+  "tier": "common",
+  "species": "fox",
+  "grid": "ea5ce5cec27a408a",
+  "blink": "ea5ce5cec27a408a"
+ },
+ {
+  "name": "stranger_268",
+  "normalized": "stranger_268",
+  "seed": 4774106928143467,
+  "tier": "common",
+  "species": "panda",
+  "grid": "617071332e5a3249",
+  "blink": "617071332e5a3249"
+ },
+ {
+  "name": "stranger_269",
+  "normalized": "stranger_269",
+  "seed": 8743666533291342,
+  "tier": "common",
+  "species": "fox",
+  "grid": "fe7a8ef3a331b36e",
+  "blink": "796520980822df85"
+ },
+ {
+  "name": "stranger_270",
+  "normalized": "stranger_270",
+  "seed": 5614757315566265,
+  "tier": "rare",
+  "species": "bunny",
+  "grid": "df9f8a518a48dadf",
+  "blink": "596e0025d745eb20"
+ },
+ {
+  "name": "stranger_271",
+  "normalized": "stranger_271",
+  "seed": 3682726113882626,
+  "tier": "common",
+  "species": "frog",
+  "grid": "328192e91420402d",
+  "blink": "328192e91420402d"
+ },
+ {
+  "name": "stranger_272",
+  "normalized": "stranger_272",
+  "seed": 9002332105939450,
+  "tier": "rare",
+  "species": "frog",
+  "grid": "b2751ad356f6d9bf",
+  "blink": "b2751ad356f6d9bf"
+ },
+ {
+  "name": "stranger_273",
+  "normalized": "stranger_273",
+  "seed": 757849531565705,
+  "tier": "common",
+  "species": "bear",
+  "grid": "323f3cbda67fede3",
+  "blink": "18c5cab236c535ab"
+ },
+ {
+  "name": "stranger_274",
+  "normalized": "stranger_274",
+  "seed": 8981194345135578,
+  "tier": "common",
+  "species": "bear",
+  "grid": "3e08a3d1f3f8e2ce",
+  "blink": "ef6ea918244c36d5"
+ },
+ {
+  "name": "stranger_275",
+  "normalized": "stranger_275",
+  "seed": 7565295864658707,
+  "tier": "common",
+  "species": "dog",
+  "grid": "ac0efc0832466e46",
+  "blink": "fa186398e0c29990"
+ },
+ {
+  "name": "stranger_276",
+  "normalized": "stranger_276",
+  "seed": 683076669094737,
+  "tier": "common",
+  "species": "panda",
+  "grid": "86fdafc939874923",
+  "blink": "5ae9b5d823e1c4bd"
+ },
+ {
+  "name": "stranger_277",
+  "normalized": "stranger_277",
+  "seed": 1568656868172843,
+  "tier": "rare",
+  "species": "pig",
+  "grid": "8ba0963e4b925f76",
+  "blink": "8ba0963e4b925f76"
+ },
+ {
+  "name": "stranger_278",
+  "normalized": "stranger_278",
+  "seed": 2415922867071560,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "37c161b429713c41",
+  "blink": "62296e04b2aea3c6"
+ },
+ {
+  "name": "stranger_279",
+  "normalized": "stranger_279",
+  "seed": 2071594105169324,
+  "tier": "common",
+  "species": "owl",
+  "grid": "bdf34f358848c966",
+  "blink": "dcb55c8ead9309ed"
+ },
+ {
+  "name": "night_owl",
+  "normalized": "night_owl",
+  "seed": 5083244409446093,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "8e106677d1e4fd08",
+  "blink": "8e106677d1e4fd08"
+ },
+ {
+  "name": "Night_Owl ",
+  "normalized": "night_owl",
+  "seed": 5083244409446093,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "8e106677d1e4fd08",
+  "blink": "8e106677d1e4fd08"
+ },
+ {
+  "name": "  NIGHT   owl  ",
+  "normalized": "night owl",
+  "seed": 215529241851673,
+  "tier": "common",
+  "species": "hamster",
+  "grid": "e16601be88c1386e",
+  "blink": "cf5dbdc8bbac5c98"
+ },
+ {
+  "name": "",
+  "normalized": "",
+  "seed": 3243757587651118,
+  "tier": "legendary",
+  "species": "fox",
+  "grid": "592fe1d9bf2d39d9",
+  "blink": "f745a6220481d322"
+ },
+ {
+  "name": "maya",
+  "normalized": "maya",
+  "seed": 5672938920960816,
+  "tier": "rare",
+  "species": "cat",
+  "grid": "0ea3f655eeee23b9",
+  "blink": "54cc575929a79471"
+ },
+ {
+  "name": "Leo",
+  "normalized": "leo",
+  "seed": 848481835360400,
+  "tier": "common",
+  "species": "raccoon",
+  "grid": "7fe21c071e289cef",
+  "blink": "a8f3f946959b6406"
+ },
+ {
+  "name": "राहुल",
+  "normalized": "राहुल",
+  "seed": 8407724460419466,
+  "tier": "common",
+  "species": "fox",
+  "grid": "0e07f0ab2d59c937",
+  "blink": "0e07f0ab2d59c937"
+ },
+ {
+  "name": "José",
+  "normalized": "josé",
+  "seed": 2550839180218351,
+  "tier": "common",
+  "species": "pig",
+  "grid": "fe318f1204ac02dd",
+  "blink": "9cd0144e6c6c8de3"
+ },
+ {
+  "name": "Zoë",
+  "normalized": "zoë",
+  "seed": 120667544410985,
+  "tier": "epic",
+  "species": "fox",
+  "grid": "33f82406c9f835c7",
+  "blink": "38f8e70e73f6fc0b"
+ },
+ {
+  "name": "ｆｕｌｌｗｉｄｔｈ",
+  "normalized": "fullwidth",
+  "seed": 8281245730765271,
+  "tier": "common",
+  "species": "dog",
+  "grid": "11f4c4bfa28e6614",
+  "blink": "ef67d92811e1d0f0"
+ },
+ {
+  "name": "x",
+  "normalized": "x",
+  "seed": 432860093794037,
+  "tier": "common",
+  "species": "axolotl",
+  "grid": "a842ec2ebd9e6839",
+  "blink": "a842ec2ebd9e6839"
+ },
+ {
+  "name": "a very long name that keeps going and going",
+  "normalized": "a very long name that keeps going and going",
+  "seed": 4583964857609415,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "a16c39cf9fa525a7",
+  "blink": "f48c6de16b60b47e"
+ },
+ {
+  "name": "goblin_mode",
+  "normalized": "goblin_mode",
+  "seed": 3136387806837110,
+  "tier": "common",
+  "species": "frog",
+  "grid": "7fa1ed78c95dfd58",
+  "blink": "7fa1ed78c95dfd58"
+ },
+ {
+  "name": "npc_42",
+  "normalized": "npc_42",
+  "seed": 1248938729921783,
+  "tier": "common",
+  "species": "bunny",
+  "grid": "50e44361416c6693",
+  "blink": "b443a067082e8bc8"
+ },
+ {
+  "name": "aura_farmer",
+  "normalized": "aura_farmer",
+  "seed": 273581278003828,
+  "tier": "rare",
+  "species": "mouse",
+  "grid": "fc27f86f19c9036e",
+  "blink": "ad929d2976f6d1d4"
+ },
+ {
+  "name": "snack_attack",
+  "normalized": "snack_attack",
+  "seed": 5624567917752731,
+  "tier": "common",
+  "species": "mouse",
+  "grid": "5ac694f290d211d2",
+  "blink": "516f318a4db54aaf"
+ },
+ {
+  "name": "moon_child",
+  "normalized": "moon_child",
+  "seed": 6519282545427899,
+  "tier": "common",
+  "species": "bear",
+  "grid": "5ceb248e4a0dbb5f",
+  "blink": "9298432da0dab7d0"
+ },
+ {
+  "name": "sleepy_bean",
+  "normalized": "sleepy_bean",
+  "seed": 1973562084171811,
+  "tier": "legendary",
+  "species": "frog",
+  "grid": "b84d6f214b5faa89",
+  "blink": "b84d6f214b5faa89"
+ },
+ {
+  "name": "lowkey_luna",
+  "normalized": "lowkey_luna",
+  "seed": 6870543295655010,
+  "tier": "epic",
+  "species": "panda",
+  "grid": "dabc3c0fe49efb42",
+  "blink": "0839eb3a51d4fd24"
+ },
+ {
+  "name": "chai_lover",
+  "normalized": "chai_lover",
+  "seed": 1858047301202599,
+  "tier": "common",
+  "species": "bear",
+  "grid": "9200792e183a90bc",
+  "blink": "9200792e183a90bc"
+ }
+]

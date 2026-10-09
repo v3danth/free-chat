@@ -1,111 +1,98 @@
 package auth
 
 import (
-	"encoding/json"
 	"net/http"
+	"net/mail"
+	"strings"
 
+	"github.com/v3danth/free-chat/internal/apperr"
+	"github.com/v3danth/free-chat/internal/httpx"
 	"github.com/v3danth/free-chat/internal/user"
 )
 
-type Handler struct {
-	service *Service
+func Routes(mux *http.ServeMux, svc *Service, ipOf httpx.IPResolver) {
+	origin := func(r *http.Request) Origin { return Origin{IP: ipOf(r)} }
+
+	mux.Handle("POST /auth/guest", httpx.Endpoint(http.StatusCreated,
+		func(r *http.Request, in user.ProfileInput) (GuestSignup, error) {
+			p, err := in.Parse()
+			return GuestSignup{Profile: p, Origin: origin(r)}, err
+		},
+		svc.CreateGuest, toSessionView))
+
+	mux.Handle("POST /auth/register", httpx.Endpoint(http.StatusCreated,
+		func(r *http.Request, in registerRequest) (Registration, error) {
+			reg, err := in.parse()
+			reg.Origin = origin(r)
+			return reg, err
+		},
+		svc.Register, user.ToSelf))
+
+	mux.Handle("POST /auth/login", httpx.Endpoint(http.StatusOK,
+		func(r *http.Request, in loginRequest) (Credentials, error) {
+			c, err := in.parse()
+			c.Origin = origin(r)
+			return c, err
+		},
+		svc.Login, toSessionView))
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+// AuthedHandler is a handler that only runs for a resumed, live identity.
+type AuthedHandler func(http.ResponseWriter, *http.Request, Identity)
+
+func (s *Service) RequireBearer(ipOf httpx.IPResolver, next AuthedHandler) http.HandlerFunc {
+	return s.RequireRole(ipOf, user.RoleUser, next)
 }
 
-type guestRequest struct {
-	Username string      `json:"username"`
-	Gender   user.Gender `json:"gender"`
-	Age      uint8       `json:"age"`
-	About    string      `json:"about"`
-}
-
-func (h *Handler) CreateGuest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
+func (s *Service) RequireRole(ipOf httpx.IPResolver, min user.Role, next AuthedHandler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok || token == "" {
+			httpx.Error(w, ErrInvalidToken)
+			return
+		}
+		u, err := s.Resume(r.Context(), token, Origin{IP: ipOf(r)})
+		if err != nil {
+			httpx.Error(w, err)
+			return
+		}
+		if !u.Role.AtLeast(min) {
+			httpx.Error(w, errForbidden)
+			return
+		}
+		next(w, r, IdentityOf(u))
 	}
-
-	var req guestRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.Username == "" {
-		http.Error(w, "username is required", http.StatusBadRequest)
-		return
-	}
-
-	token, u, err := h.service.CreateGuestUser(
-		r.Context(),
-		req.Username,
-		req.Gender,
-		req.Age,
-		req.About,
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(guestResponse{
-		Token: token,
-		User:  u,
-	})
 }
 
-type guestResponse struct {
-	Token string     `json:"token"`
-	User  *user.User `json:"user"`
-}
+var errForbidden = apperr.New(apperr.Forbidden, "you do not have permission to do that")
+
+// --- inbound ---
 
 type registerRequest struct {
-	Username string      `json:"username"`
-	Email    string      `json:"email"`
-	Password string      `json:"password"`
-	Gender   user.Gender `json:"gender"`
-	Age      uint8       `json:"age"`
-	About    string      `json:"about"`
+	user.ProfileInput
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
-func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+var (
+	errEmail    = apperr.New(apperr.Invalid, "a valid email is required")
+	errPassword = apperr.New(apperr.Invalid, "password must be 8-72 bytes")
+)
 
-	var req registerRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.Username == "" || req.Email == "" || req.Password == "" {
-		http.Error(w, "username, email, and password are required", http.StatusBadRequest)
-		return
-	}
-
-	u, err := h.service.RegisterUser(
-		r.Context(),
-		req.Username,
-		req.Email,
-		req.Password,
-		req.Gender,
-		req.Age,
-		req.About,
-	)
+func (r registerRequest) parse() (Registration, error) {
+	profile, err := r.ProfileInput.Parse()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
-		return
+		return Registration{}, err
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(u)
+	email, err := parseEmail(r.Email)
+	if err != nil {
+		return Registration{}, err
+	}
+	// bcrypt only uses the first 72 bytes and rejects longer input.
+	if len(r.Password) < 8 || len(r.Password) > 72 {
+		return Registration{}, errPassword
+	}
+	return Registration{Profile: profile, Email: email, Password: r.Password}, nil
 }
 
 type loginRequest struct {
@@ -113,32 +100,29 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
-func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
+func (r loginRequest) parse() (Credentials, error) {
+	email := strings.ToLower(strings.TrimSpace(r.Email))
+	if email == "" || r.Password == "" {
+		return Credentials{}, ErrInvalidCredentials
 	}
-
-	var req loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	token, u, err := h.service.Login(r.Context(), req.Email, req.Password)
-	if err != nil {
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(loginResponse{
-		Token: token,
-		User:  u,
-	})
+	return Credentials{Email: email, Password: r.Password}, nil
 }
 
-type loginResponse struct {
-	Token string     `json:"token"`
-	User  *user.User `json:"user"`
+func parseEmail(raw string) (string, error) {
+	email := strings.ToLower(strings.TrimSpace(raw))
+	if addr, err := mail.ParseAddress(email); err != nil || addr.Address != email || len(email) > 255 {
+		return "", errEmail
+	}
+	return email, nil
+}
+
+// --- outbound ---
+
+type sessionView struct {
+	Token string    `json:"token"`
+	User  user.Self `json:"user"`
+}
+
+func toSessionView(s Session) sessionView {
+	return sessionView{Token: s.Token, User: user.ToSelf(s.User)}
 }
