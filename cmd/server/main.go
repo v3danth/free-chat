@@ -38,6 +38,12 @@ func main() {
 
 // run is the composition root: the only place that knows every package and
 // the only place with process-level side effects.
+// schema lists columns added after the first migration, with the file that
+// adds each, so an out-of-date database is caught at startup.
+var schema = []database.Requirement{
+	{Table: "users", Column: "tags", Migration: "migrations/002_tags.sql"},
+}
+
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -55,6 +61,9 @@ func run() error {
 		return err
 	}
 	defer db.Close()
+	if err := database.RequireColumns(ctx, db, schema...); err != nil {
+		return err
+	}
 
 	locator, closeGeo, err := openGeo(cfg.GeoIPPath)
 	if err != nil {
