@@ -413,6 +413,7 @@ function setSession(token, me) {
 }
 
 function endSession(message) {
+  clearInterval(deskTimer);
   state.ended = true;
   state.ws?.close();
   state.ws = null;
@@ -450,6 +451,7 @@ function topbar(extra) {
 }
 
 function renderShell() {
+  clearInterval(deskTimer);
   if (location.hash === '#desk' && isStaff()) return renderDesk();
   state.screen = 'room';
   const deskLink = isStaff() && h('button', { class: 'btn sm outline', type: 'button', onclick: () => { location.hash = '#desk'; } }, icon('shield', 16), h('span', { class: 'desk-label' }, t('desk')));
@@ -510,7 +512,14 @@ function renderMobileTabs() {
   if (!nav) return;
   const tab = (view, label, badge) => h('button', {
     class: 'tab', type: 'button', role: 'tab', 'aria-selected': String(state.view === view),
-    onclick: () => { state.view = view; if (view !== 'room') state.side = view; $('#stage').dataset.view = view; renderSide(); renderMobileTabs(); },
+    onclick: () => {
+      state.view = view;
+      if (view !== 'room') state.side = view;
+      if (view === 'chats' && state.active != null) convo(state.active).unread = 0;
+      $('#stage').dataset.view = view;
+      renderSide();
+      renderMobileTabs();
+    },
   }, label, badge ? h('span', { class: 'badge' }, badge) : null);
   nav.replaceChildren(tab('room', t('room')), tab('people', t('people'), null), tab('chats', t('chats'), unreadTotal() || null));
 }
@@ -545,7 +554,8 @@ function feedLine(ev) {
 }
 
 function shot(image) {
-  return h('img', { class: 'shot', src: image.thumb_url, alt: '', loading: 'lazy', onclick: () => openLightbox(image.url) });
+  return h('button', { type: 'button', class: 'shot-btn', 'aria-label': 'Open photo', onclick: () => openLightbox(image.url) },
+    h('img', { class: 'shot', src: image.thumb_url, alt: '', loading: 'lazy' }));
 }
 
 function addFeed(ev) {
@@ -574,7 +584,16 @@ function renderSide() {
     onclick: () => { state.side = key; renderSide(); },
   }, label, badge ? h('span', { class: 'badge' }, badge) : null);
   const tabs = h('div', { class: 'tabs', role: 'tablist' }, tab('people', t('people')), tab('chats', t('chats'), unreadTotal() || null));
+  // Presence and messages re-render this pane often: keep where the reader
+  // was scrolled to and which control had focus.
+  const scrolls = ['.people', '.convo-list'].map((sel) => [sel, side.querySelector(sel)?.scrollTop]);
+  const focusKey = side.contains(document.activeElement) ? document.activeElement.dataset.key : null;
   side.replaceChildren(tabs, state.side === 'chats' ? chatsPane() : peoplePane());
+  for (const [sel, top] of scrolls) {
+    const el = side.querySelector(sel);
+    if (el && top != null) el.scrollTop = top;
+  }
+  if (focusKey) side.querySelector(`[data-key="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
 }
 
 function peoplePane() {
@@ -595,7 +614,7 @@ function personCard(card) {
   const c = state.convos.get(card.id);
   return h('div', { class: 'pcard', 'data-tier': card.avatar_tier },
     h('button', {
-      type: 'button', class: 'photo', 'aria-label': card.name, onclick: () => openPerson(card.id),
+      type: 'button', class: 'photo', 'aria-label': card.name, 'data-key': `card-${card.id}`, onclick: () => openPerson(card.id),
       style: { ...pictureStyle({ ...card, photo_url: c?.peer.photo_url }), border: 'none', width: '100%', cursor: 'pointer' },
     },
       h('span', { class: 'pill' }, hereFor(card.online_since)),
@@ -604,10 +623,17 @@ function personCard(card) {
       h('span', { class: 'name' }, h('span', {}, h('span', { class: 'who-name', 'data-gender': card.gender }, card.name), `, ${card.age}`), flag(card.country)),
       h('span', { class: 'sub' }, card.about || [genderLabel(card.gender), card.location].filter(Boolean).join(' · ')),
       tagRow(card.tags),
-      h('button', { class: 'btn outline sm', type: 'button', onclick: () => openChat(card.id) }, c ? t('open') : t('knock'))));
+      h('button', { class: 'btn outline sm', type: 'button', 'data-key': `knock-${card.id}`, onclick: () => openChat(card.id) }, c ? t('open') : t('knock'))));
 }
 
 // ---------- Private chats ----------
+
+// isViewing: peerId's chat is on screen right now (on phones, the Chats tab
+// must be the one showing).
+function isViewing(peerId) {
+  return state.active === peerId && state.side === 'chats' && document.visibilityState === 'visible'
+    && (state.view === 'chats' || !matchMedia('(max-width: 960px)').matches);
+}
 
 function openChat(peerId) {
   convo(peerId).unread = 0;
@@ -643,7 +669,6 @@ const lastTs = (c) => c.msgs[c.msgs.length - 1]?.ts || 0;
 
 function convoView(peerId) {
   const c = convo(peerId);
-  c.unread = 0;
   const peer = c.peer;
   const meta = [genderLabel(peer.gender), peer.age, peer.location].filter(Boolean).join(' · ');
 
@@ -923,10 +948,20 @@ const HANDLERS = {
   hello(f) {
     state.me = f.you;
     state.online = new Map(f.online.filter((c) => c.id !== f.you.id).map((c) => [c.id, c]));
+    // The server is the source of truth for private chats: doors survive a
+    // quick reconnect but close when either side really disconnects.
+    const doors = new Map((f.doors || []).map((d) => [d.with, d]));
+    for (const id of doors.keys()) if (state.online.has(id)) convo(id);
     for (const [id, c] of state.convos) {
       const card = state.online.get(id);
-      if (card) c.peer = { ...card, photo_url: c.peer.photo_url };
-      else c.phase = 'gone';
+      if (!card) { c.phase = 'gone'; continue; }
+      const d = doors.get(id);
+      c.peer = { ...card, photo_url: d?.open && card.has_photo ? c.peer.photo_url : undefined };
+      if (!d) {
+        if (c.phase !== null) { c.phase = null; c.msgs = []; }
+      } else {
+        c.phase = d.open ? 'open' : d.knocked_by_me ? 'knocked' : 'incoming';
+      }
     }
     state.feed = [];
     if (state.screen === 'room') renderShell();
@@ -947,7 +982,7 @@ const HANDLERS = {
 
   presence(f) {
     if (f.user_id === state.me?.id) {
-      if (f.user) state.me = { ...state.me, ...f.user };
+      if (f.user) state.me = { ...state.me, ...f.user, photo_url: f.user.has_photo ? state.me.photo_url : undefined };
       return;
     }
     const c = state.convos.get(f.user_id);
@@ -957,8 +992,12 @@ const HANDLERS = {
     } else {
       state.online.set(f.user_id, f.user);
       if (c) {
-        c.peer = { ...f.user, photo_url: c.peer.photo_url };
-        if (c.phase === 'gone') c.phase = null; // the door closed; a new knock starts over
+        c.peer = { ...f.user, photo_url: f.user.has_photo ? c.peer.photo_url : undefined };
+        if (c.phase === 'gone') { // the door closed when they left; a new knock starts over
+          c.phase = null;
+          c.msgs = [];
+          c.peer.photo_url = undefined;
+        }
       }
     }
     refreshCounts();
@@ -970,11 +1009,14 @@ const HANDLERS = {
     const mine = f.from === state.me.id;
     const peerId = mine ? f.to : f.from;
     const c = convo(peerId);
-    if (f.knock) c.phase = mine ? 'knocked' : 'incoming';
-    else if (c.phase !== 'open') c.phase = 'open';
+    if (f.knock) {
+      c.phase = mine ? 'knocked' : 'incoming';
+      c.msgs = []; // a knock opens a new conversation; the old one ended with its door
+    } else if (c.phase !== 'open') {
+      c.phase = 'open';
+    }
     c.msgs.push(f);
-    const viewing = state.active === peerId && state.side === 'chats' && document.visibilityState === 'visible';
-    if (!mine && !viewing) {
+    if (!mine && !isViewing(peerId)) {
       c.unread++;
       if (f.knock) toast(t('knockIn', { name: c.peer.name }));
     }
@@ -1038,15 +1080,22 @@ async function deskOverview(main) {
   const stamp = h('span', { class: 'muted', style: { fontSize: '13px' } });
   const body = h('div', { class: 'overview' });
   main.append(h('div', { class: 'desk-head' }, h('h1', {}, 'Overview'), stamp), body);
+  // This page's own timer: it stops itself once the page is gone, whatever
+  // happened to the request, and never touches another page's timer.
+  const timer = setInterval(() => load(), 15000);
+  deskTimer = timer;
   const load = async () => {
+    if (!body.isConnected) { clearInterval(timer); return; }
     let o;
-    try { o = await api('GET', '/admin/overview'); } catch (ex) { body.replaceChildren(h('p', { class: 'error-text' }, ex.message)); return; }
-    if (!body.isConnected) { clearInterval(deskTimer); return; }
+    try { o = await api('GET', '/admin/overview'); } catch (ex) {
+      if (body.isConnected) body.replaceChildren(h('p', { class: 'error-text' }, ex.message));
+      return;
+    }
+    if (!body.isConnected) { clearInterval(timer); return; }
     stamp.textContent = `Live, updated ${new Date(o.generated_at).toLocaleTimeString()}`;
     body.replaceChildren(...overviewView(o));
   };
   await load();
-  deskTimer = setInterval(load, 15000);
 }
 
 function overviewView(o) {
@@ -1286,7 +1335,10 @@ async function deskAudit(main) {
 
 window.addEventListener('hashchange', () => { if (state.token && state.me) renderShell(); });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && state.side === 'chats' && state.active != null) rerenderChats();
+  if (state.active != null && isViewing(state.active)) {
+    convo(state.active).unread = 0;
+    rerenderChats();
+  }
 });
 
 async function boot() {

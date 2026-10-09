@@ -114,6 +114,31 @@ func (r *MySQLRepository) Hide(ctx context.Context, id uint64) error {
 	return nil
 }
 
+// Unhide undoes Hide, for a message restored after its reports are dismissed.
+func (r *MySQLRepository) Unhide(ctx context.Context, id uint64) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE messages SET hidden_at = NULL WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MediaSeenBy reports whether viewer could have seen an image in a message:
+// posted to a room, or sent to or by them privately.
+func (r *MySQLRepository) MediaSeenBy(ctx context.Context, mediaID, viewer uint64) (bool, error) {
+	var seen bool
+	err := r.db.QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM messages
+		               WHERE media_id = ? AND (room_id IS NOT NULL OR sender_id = ? OR recipient_id = ?))`,
+		mediaID, viewer, viewer).Scan(&seen)
+	return seen, err
+}
+
 func (r *MySQLRepository) LiveRooms(ctx context.Context) ([]Room, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT id, slug, name FROM rooms WHERE is_live ORDER BY id`)
 	if err != nil {

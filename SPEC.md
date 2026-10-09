@@ -34,10 +34,14 @@ Response: `{ "token": "...", "user": Self }`
 
 ### POST /auth/register → 201
 Same fields plus `email` and `password` (8–72 bytes). Member names are unique.
-Returns `Self`. Members then log in.
+Returns `Self`. Members then log in. Shares guest sign-up's limit: 30 new
+profiles per network per 10 minutes, then `429`.
 
 ### POST /auth/login → 200
 `{ "email": "...", "password": "..." }` → `{ "token": "...", "user": Self }`
+
+At most 8 attempts per email and 20 per network in 10 minutes, then `429`
+(even with the right password, until the window ends).
 
 ### GET /me → 200, PATCH /me → 200
 PATCH changes only `tags`, `about`, `location` and `photo_id` (an image you
@@ -145,7 +149,7 @@ frames) and the chance of each rank. The page at `/faces` uses these routes.
 
 | type | When | Payload |
 |---|---|---|
-| `hello` | on connect | `you` (Self), `online` (Cards), `rooms` (`[{id, name}]`), `rate_limit` (`{remaining, reset_in_seconds}`) |
+| `hello` | on connect | `you` (Self), `online` (Cards), `rooms` (`[{id, name}]`), `rate_limit` (`{remaining, reset_in_seconds}`: seconds left in the current window), `doors` (`[{with, open, knocked_by_me?}]`: your private chats that are still open or knocking; rebuild chat state from this after a reconnect) |
 | `presence` | someone joins, edits, leaves | `event`: `join` (also a reconnect), `update`, `leave`; `user_id`; `user` (Card, not on leave) |
 | `history` | after `join` | `room_id`, `messages`: up to 20 chat events, **newest first** |
 | `chat` | a room message | `id, room_id, sender_id, name, gender, content, image?{url, thumb_url}, ts, filtered?` (`gender` is the sender's, for name colours) |
@@ -181,10 +185,15 @@ frames) and the chance of each rank. The page at `/faces` uses these routes.
 { "target_type": "message", "target_id": 123, "reason": "harassment", "note": "optional" }
 ```
 `target_type`: message, media, user. `reason`: spam, harassment, nudity,
-violence, hate, underage, scam, other. A private message can only be
-reported by someone in that conversation. A snapshot of the evidence is kept
-with the report. At 3 open reports (configurable) a message or image is
-hidden until a moderator reviews it.
+violence, hate, underage, scam, other. You can only report what you could
+see: a private message only from inside that conversation; an image only if
+it was posted in a room, sent in one of your private chats, or is the profile
+photo of someone you have an open door with (otherwise `403`). A snapshot of
+the evidence is kept with the report.
+
+At 3 open reports (configurable) a message or image is hidden, not deleted,
+until a moderator reviews it: removing it makes it permanent, dismissing
+every report brings it back. Staff content is never hidden automatically.
 
 ---
 
@@ -207,7 +216,9 @@ hidden until a moderator reviews it.
 | DELETE /admin/words/{id} | | |
 | GET /admin/audit | | Every moderation action, newest first |
 
-Nobody can act on themselves or on someone of equal or higher role.
+Nobody can act on themselves or on someone of equal or higher role; that
+includes removing their messages and images. `GET /admin/reports` lists the
+open queue oldest first and closed reports newest first.
 
 ---
 

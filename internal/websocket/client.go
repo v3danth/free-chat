@@ -18,6 +18,7 @@ const (
 )
 
 type Client struct {
+	uid  uint64
 	conn *websocket.Conn
 	send chan []byte
 
@@ -33,6 +34,7 @@ type Client struct {
 
 func newClient(u user.User, blocked map[uint64]struct{}, conn *websocket.Conn) *Client {
 	return &Client{
+		uid:     u.ID,
 		conn:    conn,
 		send:    make(chan []byte, sendBuffer),
 		user:    u,
@@ -42,7 +44,8 @@ func newClient(u user.User, blocked map[uint64]struct{}, conn *websocket.Conn) *
 	}
 }
 
-func (c *Client) id() uint64 { return c.user.ID }
+// id never changes, so it needs no lock (c.user is replaced under Hub.mu).
+func (c *Client) id() uint64 { return c.uid }
 
 // deliver queues a frame without blocking. A client that cannot keep up is
 // disconnected rather than silently missing messages.

@@ -68,6 +68,17 @@ func (l *Limiter) Allow(userID uint64) bool {
 	return ok
 }
 
+// ResetIn is how long until userID's current window ends (0 if none).
+func (l *Limiter) ResetIn(userID uint64) time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	w, ok := l.windows[userID]
+	if !ok {
+		return 0
+	}
+	return max(0, w.start.Add(l.cfg.Window).Sub(time.Now()))
+}
+
 func (l *Limiter) Remaining(userID uint64) int {
 	l.mu.Lock()
 	defer l.mu.Unlock()

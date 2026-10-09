@@ -13,6 +13,8 @@ type Repository interface {
 	GetByID(ctx context.Context, id uint64) (Media, error)
 	// MarkRemoved soft-deletes the row and returns it as it was.
 	MarkRemoved(ctx context.Context, id uint64) (Media, error)
+	// ClearRemoved undoes MarkRemoved, for an image restored after a hide.
+	ClearRemoved(ctx context.Context, id uint64) error
 	BanHash(ctx context.Context, sha []byte, actorID uint64) error
 	IsHashBanned(ctx context.Context, sha []byte) (bool, error)
 }
@@ -62,6 +64,11 @@ func (r *MySQLRepository) MarkRemoved(ctx context.Context, id uint64) (Media, er
 	}
 	_, err = r.db.ExecContext(ctx, `UPDATE media SET removed_at = NOW() WHERE id = ? AND removed_at IS NULL`, id)
 	return m, err
+}
+
+func (r *MySQLRepository) ClearRemoved(ctx context.Context, id uint64) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE media SET removed_at = NULL WHERE id = ?`, id)
+	return err
 }
 
 func (r *MySQLRepository) BanHash(ctx context.Context, sha []byte, actorID uint64) error {

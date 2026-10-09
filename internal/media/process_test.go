@@ -95,3 +95,15 @@ func TestProcessRejects(t *testing.T) {
 		}
 	}
 }
+
+func TestRejectsDeepPixelBombs(t *testing.T) {
+	// A 16-bit PNG that is tiny on disk but would decode to ~320 MB.
+	var buf bytes.Buffer
+	img := image.NewNRGBA64(image.Rect(0, 0, 6324, 6324))
+	if err := (&png.Encoder{CompressionLevel: png.BestCompression}).Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Process(buf.Bytes()); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("got %v, want ErrTooLarge (%d bytes on disk)", err, buf.Len())
+	}
+}

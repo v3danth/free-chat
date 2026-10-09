@@ -14,6 +14,7 @@ type fakeStore struct {
 	cutoffs   []uint64
 	online    []uint64
 	keys      []string
+	guests    []uint64
 }
 
 func (f *fakeStore) PurgeMessages(_ context.Context, cutoff uint64, batch int) (int64, error) {
@@ -23,9 +24,9 @@ func (f *fakeStore) PurgeMessages(_ context.Context, cutoff uint64, batch int) (
 	return n, nil
 }
 
-func (f *fakeStore) ExpireGuests(_ context.Context, _ time.Time, online []uint64) ([]string, error) {
+func (f *fakeStore) ExpireGuests(_ context.Context, _ time.Time, online []uint64) ([]uint64, []string, error) {
 	f.online = online
-	return f.keys, nil
+	return f.guests, f.keys, nil
 }
 
 func (f *fakeStore) PurgeExpiredIPBans(context.Context) (int64, error) { return 0, nil }
@@ -34,16 +35,24 @@ type fakeFiles struct{ deleted []string }
 
 func (f *fakeFiles) DeleteFiles(key string) { f.deleted = append(f.deleted, key) }
 
-type fakeOnline []uint64
+type fakeLive struct {
+	online        []uint64
+	forgotBefore  uint64
+	forgotSenders []uint64
+}
 
-func (f fakeOnline) OnlineIDs() []uint64 { return f }
+func (f *fakeLive) OnlineIDs() []uint64 { return f.online }
+func (f *fakeLive) Forget(before uint64, senders []uint64) {
+	f.forgotBefore, f.forgotSenders = before, senders
+}
 
 func TestSweep(t *testing.T) {
-	store := &fakeStore{remaining: 12_000, keys: []string{"a", "b"}}
+	store := &fakeStore{remaining: 12_000, keys: []string{"a", "b"}, guests: []uint64{40, 41}}
 	files := &fakeFiles{}
+	live := &fakeLive{online: []uint64{7}}
 	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
 
-	Sweep(context.Background(), store, files, fakeOnline{7}, 7*24*time.Hour, now)
+	Sweep(context.Background(), store, files, live, 7*24*time.Hour, now)
 
 	if len(store.cutoffs) != 3 || store.remaining != 0 {
 		t.Fatalf("expected 3 batches to purge 12000 rows, got %d (left %d)", len(store.cutoffs), store.remaining)
@@ -56,5 +65,8 @@ func TestSweep(t *testing.T) {
 	}
 	if !slices.Equal(files.deleted, []string{"a", "b"}) {
 		t.Fatalf("deleted files = %v", files.deleted)
+	}
+	if live.forgotBefore != store.cutoffs[0] || !slices.Equal(live.forgotSenders, []uint64{40, 41}) {
+		t.Fatalf("the hub must forget what was deleted: before=%d senders=%v", live.forgotBefore, live.forgotSenders)
 	}
 }
