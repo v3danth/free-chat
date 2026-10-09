@@ -347,7 +347,7 @@ func TestImageReportsNeedVisibilityAndOnlyHide(t *testing.T) {
 		t.Fatalf("unseen image: %v", err)
 	}
 	// Once a door opens, the other side sees the photo and may report it.
-	f.users.UpdateCard(ctx, owner.UserID, nil, "", "", ptr(uint64(5)))
+	f.users.UpdateCard(ctx, owner.UserID, user.Profile{}, ptr(uint64(5)))
 	f.live.doors[[2]uint64{min(owner.UserID, b.UserID), max(owner.UserID, b.UserID)}] = true
 	if err := report(b); err != nil {
 		t.Fatalf("photo revealed through a door: %v", err)
