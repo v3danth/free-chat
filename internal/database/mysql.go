@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -54,6 +55,34 @@ func Open(ctx context.Context, cfg Config) (*sql.DB, error) {
 }
 
 const errDuplicateKey = 1062
+
+// Requirement is a column the code needs and the migration that adds it.
+type Requirement struct {
+	Table, Column, Migration string
+}
+
+// RequireColumns checks the schema matches the code before serving, so a
+// database that missed a migration fails at startup with the file to apply,
+// not later on every request.
+func RequireColumns(ctx context.Context, db *sql.DB, reqs ...Requirement) error {
+	var missing []string
+	for _, r := range reqs {
+		var n int
+		err := db.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM information_schema.COLUMNS
+			WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`, r.Table, r.Column).Scan(&n)
+		if err != nil {
+			return fmt.Errorf("check schema: %w", err)
+		}
+		if n == 0 {
+			missing = append(missing, fmt.Sprintf("%s.%s (apply %s)", r.Table, r.Column, r.Migration))
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("database is behind the code; missing %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
 
 func IsDuplicateKey(err error) bool { return hasCode(err, errDuplicateKey) }
 
