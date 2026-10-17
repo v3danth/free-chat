@@ -27,11 +27,20 @@ type fakeGeo map[string]string
 
 func (f fakeGeo) Country(ip string) string { return f[ip] }
 
+// fakePresence is the set of names connected right now, lower-cased.
+type fakePresence map[string]bool
+
+func (f fakePresence) IsNameOnline(name string) bool { return f[strings.ToLower(name)] }
+
 func newService() (*auth.Service, *usertest.Memory, fakeIPBans) {
+	return newServiceWith(fakePresence{})
+}
+
+func newServiceWith(online fakePresence) (*auth.Service, *usertest.Memory, fakeIPBans) {
 	repo := usertest.NewMemory()
 	bans := fakeIPBans{}
 	words := filter.NewLive(filter.New(1000, []filter.Rule{{Word: "scam", Action: filter.Block}}))
-	return auth.NewService(repo, auth.NewTokens(secret), bans, fakeGeo{"203.0.113.9": "IN"}, words, secret), repo, bans
+	return auth.NewService(repo, auth.NewTokens(secret), bans, online, fakeGeo{"203.0.113.9": "IN"}, words, secret), repo, bans
 }
 
 var home = auth.Origin{IP: "203.0.113.9"}
@@ -57,13 +66,49 @@ func TestGuestJoinsWithCountryAndResumes(t *testing.T) {
 	}
 }
 
-func TestGuestNamesAreNotUnique(t *testing.T) {
+func TestNameSomeoneOnlineUsesIsRefused(t *testing.T) {
+	svc, _, _ := newServiceWith(fakePresence{"alice": true})
+	ctx := context.Background()
+	if _, err := svc.CreateGuest(ctx, auth.GuestSignup{Profile: profile("Alice"), Origin: home}); !errors.Is(err, auth.ErrNameInUse) {
+		t.Fatalf("guest: want ErrNameInUse, got %v", err)
+	}
+	reg := auth.Registration{Profile: profile("alice"), Email: "a@example.com", Password: "hunter22!", Origin: home}
+	if _, err := svc.Register(ctx, reg); !errors.Is(err, auth.ErrNameInUse) {
+		t.Fatalf("member: want ErrNameInUse, got %v", err)
+	}
+}
+
+func TestClaimingALeftGuestNameEndsTheirSession(t *testing.T) {
 	svc, _, _ := newService()
 	ctx := context.Background()
-	for range 2 {
-		if _, err := svc.CreateGuest(ctx, auth.GuestSignup{Profile: profile("same"), Origin: home}); err != nil {
-			t.Fatalf("guests may share a name: %v", err)
-		}
+	first, err := svc.CreateGuest(ctx, auth.GuestSignup{Profile: profile("sam"), Origin: home})
+	if err != nil {
+		t.Fatalf("first guest: %v", err)
+	}
+	// sam left, so the name is free: whoever asks next gets it.
+	second, err := svc.CreateGuest(ctx, auth.GuestSignup{Profile: profile("SAM"), Origin: home})
+	if err != nil {
+		t.Fatalf("claim a left name: %v", err)
+	}
+	if _, err := svc.Resume(ctx, first.Token, home); !errors.Is(err, auth.ErrNameClaimed) {
+		t.Fatalf("old owner: want ErrNameClaimed, got %v", err)
+	}
+	if _, err := svc.Resume(ctx, second.Token, home); err != nil {
+		t.Fatalf("new owner keeps the session: %v", err)
+	}
+}
+
+func TestRegisteringAGuestNameEndsTheGuestSession(t *testing.T) {
+	svc, _, _ := newService()
+	ctx := context.Background()
+	guest, _ := svc.CreateGuest(ctx, auth.GuestSignup{Profile: profile("kim"), Origin: home})
+	reg := auth.Registration{Profile: profile("kim"), Email: "k@example.com", Password: "hunter22!", Origin: home}
+	if _, err := svc.Register(ctx, reg); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	// A member, not a newer guest, holds the name: the guest just rejoins.
+	if _, err := svc.Resume(ctx, guest.Token, home); !errors.Is(err, auth.ErrSessionEnded) {
+		t.Fatalf("guest after member claim: want ErrSessionEnded, got %v", err)
 	}
 }
 
@@ -107,7 +152,9 @@ func TestResumeRejectsEndedSessions(t *testing.T) {
 
 	// A ban revokes the token (version bump) and blocks the account.
 	until := time.Now().Add(time.Hour)
-	repo.SetBan(ctx, s.User.ID, &until)
+	if err := repo.SetBan(ctx, s.User.ID, &until); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.Resume(ctx, s.Token, home); !errors.Is(err, auth.ErrSessionEnded) {
 		t.Fatalf("revoked token: want ErrSessionEnded, got %v", err)
 	}
@@ -166,7 +213,9 @@ func TestGuestEndpointContract(t *testing.T) {
 		Token string         `json:"token"`
 		User  map[string]any `json:"user"`
 	}
-	json.Unmarshal(rec.Body.Bytes(), &got)
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
 	if got.Token == "" || got.User["name"] != "राहुल" || got.User["country"] != "IN" || got.User["location"] != "Delhi" {
 		t.Fatalf("unexpected session view: %s", rec.Body)
 	}

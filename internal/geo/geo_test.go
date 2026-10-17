@@ -15,7 +15,7 @@ func TestCountry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	for ip, want := range map[string]string{
 		"8.8.8.8":    "US",
 		"1.1.1.1":    "AU",

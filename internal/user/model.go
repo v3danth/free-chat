@@ -72,10 +72,11 @@ type Profile struct {
 }
 
 type User struct {
-	ID      uint64
-	Kind    Kind
-	Role    Role
-	Profile Profile
+	ID       uint64
+	Kind     Kind
+	Role     Role
+	Profile  Profile
+	Settings Settings
 	// Country is set server-side from GeoIP; "" when unknown.
 	Country string
 	PhotoID *uint64

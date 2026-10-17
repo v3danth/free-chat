@@ -36,6 +36,9 @@ func (m *Memory) Create(_ context.Context, u user.User) (user.User, error) {
 		}
 	}
 	u.ID, u.CreatedAt, u.LastSeenAt = m.nextID, time.Now(), time.Now()
+	if u.Settings.KnocksFrom == "" {
+		u.Settings.KnocksFrom = user.KnocksAnyone // the column default
+	}
 	m.nextID++
 	m.byID[u.ID] = u
 	return u, nil
@@ -67,6 +70,10 @@ func (m *Memory) UpdateCard(_ context.Context, id uint64, tags []string, about, 
 	})
 }
 
+func (m *Memory) UpdateSettings(_ context.Context, id uint64, s user.Settings) error {
+	return m.update(id, func(u *user.User) { u.Settings = s })
+}
+
 func (m *Memory) Touch(_ context.Context, id uint64) error {
 	return m.update(id, func(u *user.User) { u.LastSeenAt = time.Now() })
 }
@@ -82,6 +89,34 @@ func (m *Memory) SetBan(_ context.Context, id uint64, until *time.Time) error {
 			u.TokenVersion++
 		}
 	})
+}
+
+func (m *Memory) RevokeGuestsNamed(_ context.Context, name string, keep uint64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id, u := range m.byID {
+		if isGuestNamed(u, name) && id != keep {
+			u.TokenVersion++
+			m.byID[id] = u
+		}
+	}
+	return nil
+}
+
+func (m *Memory) IsGuestNameClaimedSince(_ context.Context, name string, id uint64) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for other, u := range m.byID {
+		if isGuestNamed(u, name) && other > id {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// isGuestNamed matches the users table collation, which ignores case.
+func isGuestNamed(u user.User, name string) bool {
+	return u.Kind == user.KindGuest && strings.EqualFold(u.Profile.Name, name)
 }
 
 func (m *Memory) SetMute(_ context.Context, id uint64, until *time.Time) error {

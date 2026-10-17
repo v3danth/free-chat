@@ -157,12 +157,28 @@ func (r *MySQLRepository) WasActioned(ctx context.Context, t TargetType, targetI
 	return done, err
 }
 
-// ResolveTarget closes every open report about one target.
-func (r *MySQLRepository) ResolveTarget(ctx context.Context, t TargetType, targetID uint64, status Status, actor uint64) error {
-	_, err := r.db.ExecContext(ctx, `
+// ResolveTarget closes every open report about one target and returns the
+// reporters. The read locks the rows it returns, so a report closed by a
+// concurrent action is never thanked twice.
+func (r *MySQLRepository) ResolveTarget(ctx context.Context, t TargetType, targetID uint64, status Status, actor uint64) ([]uint64, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }() // a no-op once committed
+	reporters, err := database.Collect[uint64](ctx, tx, `
+		SELECT reporter_id FROM reports
+		WHERE target_type = ? AND target_id = ? AND status = 'open' AND reporter_id IS NOT NULL
+		FOR UPDATE`, t, targetID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `
 		UPDATE reports SET status = ?, handled_by = NULLIF(?, 0), handled_at = NOW()
-		WHERE target_type = ? AND target_id = ? AND status = 'open'`, status, actor, t, targetID)
-	return err
+		WHERE target_type = ? AND target_id = ? AND status = 'open'`, status, actor, t, targetID); err != nil {
+		return nil, err
+	}
+	return reporters, tx.Commit()
 }
 
 func scanReport(row interface{ Scan(...any) error }) (Report, error) {

@@ -32,8 +32,7 @@ func (m Message) Involves(user uint64) bool {
 // Entry is a stored message plus its image's file key while not removed.
 type Entry struct {
 	Message
-	MediaKey     string
-	SenderGender string // "" once the sender's account is gone
+	MediaKey string
 }
 
 type Room struct {

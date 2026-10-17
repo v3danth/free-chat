@@ -67,6 +67,6 @@ func parseNewStaff(w http.ResponseWriter, r *http.Request) (NewStaff, error) {
 	if !ok {
 		return NewStaff{}, errRole
 	}
-	reg, err := req.RegisterRequest.Parse()
+	reg, err := req.Parse()
 	return NewStaff{Registration: reg, Role: role}, err
 }

@@ -29,7 +29,8 @@ func (f *fakeStore) ExpireGuests(_ context.Context, _ time.Time, online []uint64
 	return f.guests, f.keys, nil
 }
 
-func (f *fakeStore) PurgeExpiredIPBans(context.Context) (int64, error) { return 0, nil }
+func (f *fakeStore) PurgeExpiredIPBans(context.Context) (int64, error)   { return 0, nil }
+func (f *fakeStore) PurgeLetters(context.Context, uint64) (int64, error) { return 0, nil }
 
 type fakeFiles struct{ deleted []string }
 

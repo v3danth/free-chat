@@ -39,8 +39,7 @@ func (h handler) upload(w http.ResponseWriter, r *http.Request, id auth.Identity
 		httpx.Error(w, err)
 		return
 	}
-	a := AttachmentOf(m.ID, m.Key)
-	httpx.JSON(w, http.StatusCreated, uploadView{ID: m.ID, URL: a.Full, ThumbURL: a.Thumb, Width: m.Width, Height: m.Height})
+	httpx.JSON(w, http.StatusCreated, ViewOf(m))
 }
 
 // readUpload is the upload boundary: bytes are capped on the wire and the
@@ -59,15 +58,25 @@ func (h handler) readUpload(w http.ResponseWriter, r *http.Request) ([]byte, err
 		if part.FormName() != "image" {
 			continue
 		}
-		raw, err := io.ReadAll(io.LimitReader(part, h.maxUpload+1))
+		raw, err := ReadCapped(part, h.maxUpload)
 		if err != nil {
 			return nil, tooLargeOr(err, ErrMissingFile)
 		}
-		if int64(len(raw)) > h.maxUpload {
-			return nil, ErrTooLarge
-		}
 		return raw, nil
 	}
+}
+
+// ReadCapped reads at most limit bytes and reports ErrTooLarge past that,
+// so every way an image enters, upload or import, has the same ceiling.
+func ReadCapped(r io.Reader, limit int64) ([]byte, error) {
+	raw, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(raw)) > limit {
+		return nil, ErrTooLarge
+	}
+	return raw, nil
 }
 
 func tooLargeOr(err, fallback error) error {
@@ -93,10 +102,17 @@ func staticFiles(root string) http.Handler {
 	})
 }
 
-type uploadView struct {
+// View is the answer to an upload, shared with GIF imports.
+type View struct {
 	ID       uint64 `json:"id"`
 	URL      string `json:"url"`
 	ThumbURL string `json:"thumb_url"`
 	Width    int    `json:"width"`
 	Height   int    `json:"height"`
+	Animated bool   `json:"animated,omitempty"`
+}
+
+func ViewOf(m Media) View {
+	a := AttachmentOf(m.ID, m.Key)
+	return View{ID: m.ID, URL: a.Full, ThumbURL: a.Thumb, Width: m.Width, Height: m.Height, Animated: mediapath.Animated(m.Key)}
 }

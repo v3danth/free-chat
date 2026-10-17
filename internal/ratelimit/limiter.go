@@ -76,7 +76,7 @@ func (l *Limiter) ResetIn(userID uint64) time.Duration {
 	if !ok {
 		return 0
 	}
-	return max(0, w.start.Add(l.cfg.Window).Sub(time.Now()))
+	return max(0, time.Until(w.start.Add(l.cfg.Window)))
 }
 
 func (l *Limiter) Remaining(userID uint64) int {

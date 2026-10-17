@@ -5,6 +5,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"testing"
@@ -61,7 +62,9 @@ func TestProcessVariants(t *testing.T) {
 
 func TestProcessStripsMetadata(t *testing.T) {
 	var buf bytes.Buffer
-	jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 64, 64)), nil)
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 64, 64)), nil); err != nil {
+		t.Fatal(err)
+	}
 	// Splice an EXIF APP1 segment with a fake GPS tag right after SOI.
 	payload := []byte("Exif\x00\x00GPSLatitude=19.07N")
 	app1 := append([]byte{0xFF, 0xE1, 0x00, byte(len(payload) + 2)}, payload...)
@@ -105,5 +108,61 @@ func TestRejectsDeepPixelBombs(t *testing.T) {
 	}
 	if _, err := Process(buf.Bytes()); !errors.Is(err, ErrTooLarge) {
 		t.Fatalf("got %v, want ErrTooLarge (%d bytes on disk)", err, buf.Len())
+	}
+}
+
+func encodeGIF(t *testing.T, w, h, frames int) []byte {
+	t.Helper()
+	g := &gif.GIF{}
+	pal := color.Palette{color.Black, color.White}
+	for i := range frames {
+		img := image.NewPaletted(image.Rect(0, 0, w, h), pal)
+		img.SetColorIndex(i%w, 0, 1)
+		g.Image = append(g.Image, img)
+		g.Delay = append(g.Delay, 5)
+	}
+	var buf bytes.Buffer
+	if err := gif.EncodeAll(&buf, g); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestProcessKeepsAnimation(t *testing.T) {
+	raw := append(encodeGIF(t, 40, 30, 4), []byte("smuggled payload")...)
+	p, err := Process(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.Animated || p.Width != 40 || p.Height != 30 {
+		t.Fatalf("animated=%v size %dx%d", p.Animated, p.Width, p.Height)
+	}
+	g, err := gif.DecodeAll(bytes.NewReader(p.Full))
+	if err != nil || len(g.Image) != 4 {
+		t.Fatalf("re-encoded GIF: %v, %d frames", err, len(g.Image))
+	}
+	if bytes.Contains(p.Full, []byte("smuggled")) {
+		t.Error("bytes after the trailer survived re-encoding")
+	}
+}
+
+func TestProcessStillGIFBecomesJPEG(t *testing.T) {
+	p, err := Process(encodeGIF(t, 40, 30, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Animated {
+		t.Fatal("a one-frame GIF must be a still")
+	}
+	dims(t, p.Full)
+}
+
+func TestGIFFramesRefusesBombsBeforeDecoding(t *testing.T) {
+	frames, pixels, ok := gifFrames(encodeGIF(t, 50, 20, 7))
+	if !ok || frames != 7 || pixels != 7*50*20 {
+		t.Fatalf("frames=%d pixels=%d ok=%v", frames, pixels, ok)
+	}
+	if _, _, ok := gifFrames([]byte("GIF89a")); ok {
+		t.Error("truncated header accepted")
 	}
 }

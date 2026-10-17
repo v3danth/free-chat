@@ -3,7 +3,10 @@
 // package can build media URLs without importing the media service.
 package mediapath
 
-import "path"
+import (
+	"path"
+	"strings"
+)
 
 const URLPrefix = "/media/"
 
@@ -16,7 +19,20 @@ const (
 
 var Variants = []Variant{Full, Thumb}
 
+// AnimatedPrefix starts the key of an animated GIF. Keys are otherwise
+// lowercase base32 (a-z, 2-7), so "0" never begins a still image's key and
+// the key alone says which file type to serve: no column, no lookup.
+const AnimatedPrefix = "0"
+
+func Animated(key string) bool { return strings.HasPrefix(key, AnimatedPrefix) }
+
 // File is the path of a variant relative to the storage root.
-func File(v Variant, key string) string { return path.Join(string(v), key+".jpg") }
+func File(v Variant, key string) string {
+	ext := ".jpg"
+	if Animated(key) {
+		ext = ".gif"
+	}
+	return path.Join(string(v), key+ext)
+}
 
 func URL(v Variant, key string) string { return URLPrefix + File(v, key) }

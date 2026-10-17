@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"math"
 	"slices"
@@ -12,6 +13,7 @@ import (
 	"github.com/v3danth/free-chat/internal/apperr"
 	"github.com/v3danth/free-chat/internal/filter"
 	"github.com/v3danth/free-chat/internal/id"
+	"github.com/v3danth/free-chat/internal/letters"
 	"github.com/v3danth/free-chat/internal/media"
 	"github.com/v3danth/free-chat/internal/message"
 	"github.com/v3danth/free-chat/internal/ratelimit"
@@ -30,6 +32,17 @@ var (
 	errSelf         = apperr.New(apperr.Invalid, "you cannot do that to yourself")
 	errWaitReply    = apperr.New(apperr.Forbidden, "wait for them to reply before sending more")
 	errKnockImage   = apperr.New(apperr.Forbidden, "you can send photos once they reply")
+	errPhotoLater   = apperr.New(apperr.Forbidden, "photos open up once you both choose to get closer")
+	errNoKnocks     = apperr.New(apperr.Forbidden, "they are not taking knocks right now")
+	errMembersOnly  = apperr.New(apperr.Forbidden, "they only take knocks from members")
+	errTooManyKnock = apperr.New(apperr.RateLimited, "you have knocked on a lot of people; give them time to answer")
+	errNotOpen      = apperr.New(apperr.Forbidden, "you need an open chat with them first")
+	errNoKnock      = apperr.New(apperr.NotFound, "there is no knock from them to decline")
+	errDeclined     = apperr.New(apperr.Forbidden, "they passed on this chat")
+	errLetterKinds  = apperr.New(apperr.Forbidden, "letters are for members writing to members")
+	// errReconsider asks the sender whether a flagged message is what they
+	// meant; sending it again with confirm goes through.
+	errReconsider = apperr.New(apperr.Invalid, "this might land badly. Send it anyway?")
 )
 
 type Writer interface {
@@ -50,15 +63,26 @@ type Blocks interface {
 	Remove(ctx context.Context, blocker, blocked uint64) error
 }
 
+// Letterbox stores letters until they are due.
+type Letterbox interface {
+	Send(ctx context.Context, l letters.Letter) error
+}
+
 type Deps struct {
-	Writer       Writer
-	IDs          *id.Generator
-	Media        Attacher
-	Users        Presence
-	Blocks       Blocks
-	Limiter      *ratelimit.Limiter
+	Writer  Writer
+	IDs     *id.Generator
+	Media   Attacher
+	Users   Presence
+	Blocks  Blocks
+	Limiter *ratelimit.Limiter
+	// KnockLimiter caps new chats per sender, so one person cannot open on
+	// everyone in the room at once.
+	KnockLimiter *ratelimit.Limiter
 	Filter       *filter.Live
 	HistoryLimit int
+	Letters      Letterbox
+	// LetterDelay is how long a letter takes to arrive.
+	LetterDelay time.Duration
 }
 
 type room struct {
@@ -94,6 +118,19 @@ func pairOf(a, b uint64) pair {
 type door struct {
 	knocker uint64
 	open    bool
+	// knock is the knocker's message while the door is shut, replayed in
+	// hello so a reload shows what is waiting.
+	knock *knockView
+	// closer holds who asked to get closer. Photos are shared only once both
+	// have, so neither side is ever shown more than they agreed to.
+	closer map[uint64]bool
+}
+
+func (d *door) isClose() bool { return len(d.closer) == 2 }
+
+// ladder is the door's reveal state as seen by viewer, who is talking to other.
+func (d *door) ladder(viewer, other uint64) ladderView {
+	return ladderView{AskedByMe: d.closer[viewer], AskedByThem: d.closer[other], Close: d.isClose()}
 }
 
 // Hub is the only mutable shared state for live connections. Everything
@@ -106,16 +143,20 @@ type Hub struct {
 	rooms   map[uint64]*room
 	order   []uint64
 	doors   map[pair]*door
+	// declined maps a pair to whoever declined the other's knock, so the
+	// knocker cannot knock again until one of them leaves.
+	declined map[pair]uint64
 }
 
 // NewHub starts with the live rooms and their recent messages (newest
 // first, as the repository returns them), so joining never reads MySQL.
 func NewHub(d Deps, rooms []message.Room, recent map[uint64][]message.Entry) *Hub {
 	h := &Hub{
-		Deps:    d,
-		clients: make(map[uint64]*Client),
-		rooms:   make(map[uint64]*room),
-		doors:   make(map[pair]*door),
+		Deps:     d,
+		clients:  make(map[uint64]*Client),
+		rooms:    make(map[uint64]*room),
+		doors:    make(map[pair]*door),
+		declined: make(map[pair]uint64),
 	}
 	for _, r := range rooms {
 		rm := &room{id: r.ID, name: r.Name, members: make(map[*Client]struct{})}
@@ -150,10 +191,10 @@ func (h *Hub) register(c *Client) {
 	}
 	h.clients[c.id()] = c
 
-	online := make([]user.Card, 0, len(h.clients)-1)
+	online := make([]json.RawMessage, 0, len(h.clients)-1)
 	for _, other := range h.clients {
 		if other != c && !blockedLocked(c, other) {
-			online = append(online, user.ToCard(other.user, other.since))
+			online = append(online, other.card)
 		}
 	}
 	rooms := make([]roomView, 0, len(h.order))
@@ -163,26 +204,31 @@ func (h *Hub) register(c *Client) {
 	doors := []doorView{}
 	for p, d := range h.doors {
 		if other, ok := p.other(c.id()); ok {
-			doors = append(doors, doorView{With: other, Open: d.open, KnockedByMe: !d.open && d.knocker == c.id()})
+			v := doorView{With: other, Open: d.open, KnockedByMe: !d.open && d.knocker == c.id(),
+				Knock: d.knock, ladderView: d.ladder(c.id(), other)}
+			if peer, online := h.clients[other]; online && d.isClose() {
+				revealed := user.ToRevealed(peer.user, peer.since)
+				v.Peer = &revealed
+			}
+			doors = append(doors, v)
 		}
 	}
-	card := user.ToCard(c.user, c.since)
+	card := c.card
 	// hello goes out before the lock is released, so nothing sent to this
 	// client (a DM, someone else's join) can arrive ahead of it.
-	c.deliver(encode(helloEvent{
-		Type:   "hello",
-		You:    user.ToSelf(c.user),
-		Online: online,
-		Rooms:  rooms,
+	c.deliver(helloFrame(helloEvent{
+		Type:  "hello",
+		You:   user.ToSelf(c.user),
+		Rooms: rooms,
 		RateLimit: rateLimitView{
 			Remaining: h.Limiter.Remaining(c.id()),
 			ResetIn:   int64(math.Ceil(h.Limiter.ResetIn(c.id()).Seconds())),
 		},
 		Doors: doors,
-	}))
+	}, online))
 	h.mu.Unlock()
 
-	h.broadcastPresence(c, presenceFrame("join", c.id(), &card))
+	h.broadcastPresence(c, presenceFrame("join", c.id(), card))
 	h.touch(c.id())
 }
 
@@ -195,6 +241,11 @@ func (h *Hub) unregister(c *Client) {
 		for p := range h.doors {
 			if p.lo == c.id() || p.hi == c.id() {
 				delete(h.doors, p)
+			}
+		}
+		for p := range h.declined {
+			if p.lo == c.id() || p.hi == c.id() {
+				delete(h.declined, p)
 			}
 		}
 	}
@@ -217,6 +268,20 @@ func (h *Hub) OnlineIDs() []uint64 {
 	return ids
 }
 
+// IsNameOnline reports whether someone connected answers to name. Sign-up
+// asks before handing out a name; it compares case-insensitively, like the
+// users table does.
+func (h *Hub) IsNameOnline(name string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, c := range h.clients {
+		if strings.EqualFold(c.user.Profile.Name, name) {
+			return true
+		}
+	}
+	return false
+}
+
 // Forget drops room history the database no longer has: messages older
 // than beforeID (retention) and anything sent by the given deleted users.
 func (h *Hub) Forget(beforeID uint64, senders []uint64) {
@@ -231,12 +296,13 @@ func (h *Hub) Forget(beforeID uint64, senders []uint64) {
 	}
 }
 
-// DoorOpen reports whether a and b have an open private chat right now.
-func (h *Hub) DoorOpen(a, b uint64) bool {
+// PhotosShared reports whether a and b both chose to get closer, so each
+// sees the other's profile photo.
+func (h *Hub) PhotosShared(a, b uint64) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	d, ok := h.doors[pairOf(a, b)]
-	return ok && d.open
+	return ok && d.isClose()
 }
 
 // Snapshot counts who is connected right now, for the control panel.
@@ -328,6 +394,14 @@ func (h *Hub) dispatch(c *Client, cmd command) error {
 		return h.block(c, cmd.user)
 	case unblockCmd:
 		return h.unblock(c, cmd.user)
+	case closerCmd:
+		return h.askCloser(c, cmd.user)
+	case tomorrowCmd:
+		return h.promiseTomorrow(c, cmd.user)
+	case declineCmd:
+		return h.decline(c, cmd.user)
+	case letterCmd:
+		return h.sendLetter(c, cmd)
 	}
 	return errUnknown
 }
@@ -361,12 +435,12 @@ func (h *Hub) sendRoom(c *Client, cmd roomSendCmd) error {
 		return errNotInRoom
 	}
 
-	out, err := h.prepare(c, cmd.content, cmd.mediaID)
+	out, err := h.prepare(c, cmd.content, cmd.mediaID, cmd.confirm)
 	if err != nil {
 		return err
 	}
 	m := message.NewRoom(h.IDs.Next(), cmd.room, c.id(), out.name, out.body, out.att.ID)
-	ev := roomEvent(m, out.gender, out.att, out.filtered)
+	ev := roomEvent(m, out.att, out.filtered)
 	frame := encode(ev)
 
 	h.mu.Lock()
@@ -391,19 +465,22 @@ func (h *Hub) sendDM(c *Client, cmd dmCmd) error {
 	// Cheap checks first, so a refused knock does not spend rate limit.
 	h.mu.RLock()
 	peer, online := h.clients[cmd.to]
-	unavailable := !online || blockedLocked(c, peer)
-	_, _, doorErr := h.knockLocked(c.id(), cmd.to, cmd.mediaID != 0, false)
-	h.mu.RUnlock()
-	if unavailable {
+	if !online || blockedLocked(c, peer) {
+		h.mu.RUnlock()
 		return errUnavailable
 	}
+	isKnock, _, doorErr := h.knockLocked(c, peer, cmd.mediaID != 0, false)
+	h.mu.RUnlock()
 	if doorErr != nil {
 		return doorErr
 	}
 
-	out, err := h.prepare(c, cmd.content, cmd.mediaID)
+	out, err := h.prepare(c, cmd.content, cmd.mediaID, cmd.confirm)
 	if err != nil {
 		return err
+	}
+	if isKnock && !h.KnockLimiter.Allow(c.id()) {
+		return errTooManyKnock
 	}
 	m := message.NewDirect(h.IDs.Next(), cmd.to, c.id(), out.name, out.body, out.att.ID)
 
@@ -413,17 +490,21 @@ func (h *Hub) sendDM(c *Client, cmd dmCmd) error {
 		h.mu.Unlock()
 		return errUnavailable
 	}
-	knock, opened, err := h.knockLocked(c.id(), cmd.to, cmd.mediaID != 0, true)
+	knock, opened, err := h.knockLocked(c, peer, cmd.mediaID != 0, true)
 	if err != nil {
 		h.mu.Unlock()
 		return err
 	}
-	frame := encode(directEvent(m, out.att, knock, out.filtered))
+	ev := directEvent(m, out.att, knock, out.filtered)
+	if knock {
+		h.doors[pairOf(c.id(), cmd.to)].knock = &knockView{ID: ev.ID, From: ev.From, Content: ev.Content, Timestamp: ev.Timestamp}
+	}
+	frame := encode(ev)
 	peer.deliver(frame)
 	c.deliver(frame) // echo: the sender learns the id and the filtered text
 	if opened {
-		c.deliver(encode(doorEvent{Type: "door", With: user.ToRevealed(peer.user, peer.since)}))
-		peer.deliver(encode(doorEvent{Type: "door", With: user.ToRevealed(c.user, c.since)}))
+		c.deliver(encode(doorEvent{Type: "door", With: user.ToKnown(peer.user, peer.since)}))
+		peer.deliver(encode(doorEvent{Type: "door", With: user.ToKnown(c.user, c.since)}))
 	}
 	h.mu.Unlock()
 
@@ -431,28 +512,51 @@ func (h *Hub) sendDM(c *Client, cmd dmCmd) error {
 	return nil
 }
 
+// knockRefusal tells a sender why policy turns them away, so a guest knows
+// that becoming a member would let them through. Nil means admitted.
+func knockRefusal(policy user.KnockPolicy, sender user.Kind) error {
+	switch {
+	case policy.Admits(sender):
+		return nil
+	case policy == user.KnocksMembers:
+		return errMembersOnly
+	}
+	return errNoKnocks
+}
+
 // knockLocked decides what a private message from -> to means. Without
 // commit it only checks; with commit it records the transition. Knocks are
-// text only, so nobody receives an unsolicited photo.
-func (h *Hub) knockLocked(from, to uint64, hasImage, commit bool) (knock, opened bool, err error) {
-	k := pairOf(from, to)
+// text only and photos wait until both choose to get closer, so nobody
+// receives a photo they did not ask for.
+func (h *Hub) knockLocked(from, to *Client, hasImage, commit bool) (knock, opened bool, err error) {
+	k := pairOf(from.id(), to.id())
 	d, ok := h.doors[k]
 	switch {
 	case !ok:
 		if hasImage {
 			return false, false, errKnockImage
 		}
+		if h.declined[k] == to.id() {
+			return false, false, errDeclined
+		}
+		if err := knockRefusal(to.user.Settings.KnocksFrom, from.user.Kind); err != nil {
+			return false, false, err
+		}
 		if commit {
-			h.doors[k] = &door{knocker: from}
+			h.doors[k] = &door{knocker: from.id()}
 		}
 		return true, false, nil
 	case d.open:
+		if hasImage && !d.isClose() {
+			return false, false, errPhotoLater
+		}
 		return false, false, nil
-	case d.knocker == from:
+	case d.knocker == from.id():
 		return false, false, errWaitReply
 	default:
 		if commit {
 			d.open = true
+			d.knock = nil
 		}
 		return false, true, nil
 	}
@@ -460,30 +564,33 @@ func (h *Hub) knockLocked(from, to uint64, hasImage, commit bool) (knock, opened
 
 type prepared struct {
 	name     string
-	gender   string
 	body     string
 	filtered bool
 	att      media.Attachment
 }
 
 // prepare runs every check a message needs before it can be sent: mute,
-// rate limit, word filter, and image ownership.
-func (h *Hub) prepare(c *Client, content string, mediaID uint64) (prepared, error) {
+// word filter, rate limit, and image ownership. The filter runs before the
+// rate limit so being asked to reconsider never costs a message.
+func (h *Hub) prepare(c *Client, content string, mediaID uint64, confirm bool) (prepared, error) {
 	h.mu.RLock()
-	name, gender, muted := c.user.Profile.Name, string(c.user.Profile.Gender), c.user.MutedUntil
+	name, muted := c.user.Profile.Name, c.user.MutedUntil
 	h.mu.RUnlock()
 
 	if muted != nil && time.Now().Before(*muted) {
 		return prepared{}, errMuted
 	}
+	res := h.Filter.Load().Apply(content)
+	switch {
+	case res.Blocked:
+		return prepared{}, errBlockedWords
+	case !confirm && slices.Contains(res.Violations, filter.ViolationProhibited):
+		return prepared{}, errReconsider
+	}
 	if !h.Limiter.Allow(c.id()) {
 		return prepared{}, errRateLimited
 	}
-	res := h.Filter.Load().Apply(content)
-	if res.Blocked {
-		return prepared{}, errBlockedWords
-	}
-	out := prepared{name: name, gender: gender, body: res.Content, filtered: res.Filtered}
+	out := prepared{name: name, body: res.Content, filtered: res.Filtered}
 	if mediaID != 0 {
 		err := h.withDB(func(ctx context.Context) (err error) {
 			out.att, err = h.Media.Attach(ctx, mediaID, c.id())
@@ -494,6 +601,119 @@ func (h *Hub) prepare(c *Client, content string, mediaID uint64) (prepared, erro
 		}
 	}
 	return out, nil
+}
+
+// openPeerLocked is the precondition shared by every command that only an
+// open chat may send, so the rule lives in one place. The caller holds h.mu.
+func (h *Hub) openPeerLocked(c *Client, target uint64) (*Client, *door, error) {
+	peer, online := h.clients[target]
+	d, ok := h.doors[pairOf(c.id(), target)]
+	if !online || !ok || !d.open {
+		return nil, nil, errNotOpen
+	}
+	return peer, d, nil
+}
+
+// askCloser records that c wants to climb the reveal ladder with target.
+// Once both have asked, each receives the other's photo.
+func (h *Hub) askCloser(c *Client, target uint64) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	peer, d, err := h.openPeerLocked(c, target)
+	if err != nil {
+		return err
+	}
+	if d.closer == nil {
+		d.closer = make(map[uint64]bool, 2)
+	}
+	d.closer[c.id()] = true
+
+	mine := closerEvent{Type: "closer", With: target, ladderView: d.ladder(c.id(), target)}
+	theirs := closerEvent{Type: "closer", With: c.id(), ladderView: d.ladder(target, c.id())}
+	if d.isClose() {
+		peerPhoto, myPhoto := user.ToRevealed(peer.user, peer.since), user.ToRevealed(c.user, c.since)
+		mine.Peer, theirs.Peer = &peerPhoto, &myPhoto
+	}
+	c.deliver(encode(mine))
+	peer.deliver(encode(theirs))
+	return nil
+}
+
+// promiseTomorrow tells target that c would like to pick the chat up
+// again. The client keeps the promise; the server only passes it on.
+func (h *Hub) promiseTomorrow(c *Client, target uint64) error {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	peer, _, err := h.openPeerLocked(c, target)
+	if err != nil {
+		return err
+	}
+	peer.deliver(encode(tomorrowEvent{Type: "tomorrow", From: c.id()}))
+	return nil
+}
+
+// decline turns down a knock c received. Only the person knocked may
+// decline, and only while the door is still shut; an open chat ends by
+// leaving or blocking.
+func (h *Hub) decline(c *Client, knocker uint64) error {
+	k := pairOf(c.id(), knocker)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	d, ok := h.doors[k]
+	if !ok || d.open || d.knocker != knocker {
+		return errNoKnock
+	}
+	delete(h.doors, k)
+	h.declined[k] = c.id()
+	c.deliver(encode(doorClosedEvent{Type: "door_closed", With: knocker, Reason: "declined", ByMe: true}))
+	if peer, online := h.clients[knocker]; online {
+		peer.deliver(encode(doorClosedEvent{Type: "door_closed", With: c.id(), Reason: "declined"}))
+	}
+	return nil
+}
+
+// sendLetter stores a letter that arrives LetterDelay later. Letters need
+// an open chat, so nobody can be written to by a stranger, and both sides
+// must be members, whose ids outlive a visit.
+func (h *Hub) sendLetter(c *Client, cmd letterCmd) error {
+	h.mu.RLock()
+	peer, _, err := h.openPeerLocked(c, cmd.to)
+	members := err == nil && c.user.Kind == user.KindMember && peer.user.Kind == user.KindMember
+	h.mu.RUnlock()
+	switch {
+	case err != nil:
+		return err
+	case !members:
+		return errLetterKinds
+	}
+
+	out, err := h.prepare(c, cmd.content, 0, cmd.confirm)
+	if err != nil {
+		return err
+	}
+	l := letters.Letter{ID: h.IDs.Next(), SenderID: c.id(), RecipientID: cmd.to, SenderName: out.name,
+		Body: out.body, DeliverAt: time.Now().Add(h.LetterDelay)}
+	if err := h.withDB(func(ctx context.Context) error { return h.Letters.Send(ctx, l) }); err != nil {
+		return err
+	}
+	c.deliver(encode(letterSentEvent{Type: "letter_sent", To: cmd.to, DeliverAt: l.DeliverAt.Unix()}))
+	return nil
+}
+
+// DeliverLetter hands a due letter to its recipient if they are online. A
+// letter between people who have since blocked each other is dropped.
+func (h *Hub) DeliverLetter(l letters.Letter) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	c, online := h.clients[l.RecipientID]
+	if !online {
+		return false
+	}
+	if _, blocked := c.blocked[l.SenderID]; !blocked {
+		c.deliver(encode(letterEvent{Type: "letter", ID: l.ID, From: l.SenderID, Name: l.SenderName,
+			Content: l.Body, SentAt: l.SentAt().Unix()}))
+	}
+	return true
 }
 
 // block is mutual and silent: each side simply disappears for the other.
@@ -541,17 +761,17 @@ func (h *Hub) unblock(c *Client, target uint64) error {
 	c.blocked = mine
 	peer := h.clients[target]
 	var visible bool
-	var cCard, pCard user.Card
+	var cCard, pCard json.RawMessage
 	if peer != nil {
 		peer.blocked = theirs
 		visible = !blockedLocked(c, peer)
-		cCard, pCard = user.ToCard(c.user, c.since), user.ToCard(peer.user, peer.since)
+		cCard, pCard = c.card, peer.card
 	}
 	h.mu.Unlock()
 
 	if visible {
-		c.deliver(presenceFrame("join", target, &pCard))
-		peer.deliver(presenceFrame("join", c.id(), &cCard))
+		c.deliver(presenceFrame("join", target, pCard))
+		peer.deliver(presenceFrame("join", c.id(), cCard))
 	}
 	return nil
 }
@@ -581,6 +801,20 @@ func (h *Hub) Mute(userID uint64, until time.Time) {
 	h.mu.Unlock()
 	if c != nil {
 		c.deliver(noticeFrame("muted", "A moderator muted you.", until))
+	}
+}
+
+// ThankReporters tells everyone online whose report led to action that it
+// did. People keep reporting, and keep coming back, when they see reports
+// work.
+func (h *Hub) ThankReporters(ids []uint64) {
+	frame := noticeFrame("report_actioned", "A moderator acted on your report. Thank you for flagging it.", time.Time{})
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, uid := range ids {
+		if c := h.clients[uid]; c != nil {
+			c.deliver(frame)
+		}
 	}
 }
 
@@ -630,6 +864,7 @@ func (h *Hub) RemoveMedia(mediaID uint64) {
 	for _, c := range h.clients {
 		if c.user.PhotoID != nil && *c.user.PhotoID == mediaID {
 			c.user.PhotoID, c.user.PhotoKey = nil, nil
+			c.refreshCardLocked()
 			changed = append(changed, c)
 		}
 	}
@@ -647,6 +882,7 @@ func (h *Hub) UpdateUser(u user.User) {
 	c := h.clients[u.ID]
 	if c != nil {
 		c.user = u
+		c.refreshCardLocked()
 	}
 	h.mu.Unlock()
 	if c != nil {
@@ -656,10 +892,11 @@ func (h *Hub) UpdateUser(u user.User) {
 
 func (h *Hub) publishCard(c *Client) {
 	h.mu.RLock()
-	card := user.ToCard(c.user, c.since)
+	card := c.card
 	h.mu.RUnlock()
-	h.broadcastPresence(c, presenceFrame("update", c.id(), &card))
-	c.deliver(presenceFrame("update", c.id(), &card))
+	frame := presenceFrame("update", c.id(), card)
+	h.broadcastPresence(c, frame)
+	c.deliver(frame)
 }
 
 // ---------------------------------------------------------------------------

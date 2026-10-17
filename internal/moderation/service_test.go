@@ -3,6 +3,7 @@ package moderation
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -92,13 +93,18 @@ func (m *memStore) SetReportStatus(_ context.Context, id uint64, s Status, _ uin
 	}
 	return ErrReportNotFound
 }
-func (m *memStore) ResolveTarget(_ context.Context, t TargetType, id uint64, s Status, _ uint64) error {
+func (m *memStore) ResolveTarget(_ context.Context, t TargetType, id uint64, s Status, _ uint64) ([]uint64, error) {
+	var reporters []uint64
 	for i := range m.reports {
-		if m.reports[i].TargetType == t && m.reports[i].TargetID == id {
-			m.reports[i].Status = s
+		rep := &m.reports[i]
+		if rep.TargetType == t && rep.TargetID == id && rep.Status == StatusOpen {
+			rep.Status = s
+			if rep.ReporterID != nil {
+				reporters = append(reporters, *rep.ReporterID)
+			}
 		}
 	}
-	return nil
+	return reporters, nil
 }
 func (m *memStore) Log(_ context.Context, a Action) error {
 	m.actions = append(m.actions, a)
@@ -174,7 +180,8 @@ func (m *memImages) Restore(_ context.Context, id uint64) (bool, error) {
 type liveLog struct {
 	kicked  []uint64
 	removed []uint64
-	doors   map[[2]uint64]bool
+	thanked []uint64
+	shared  map[[2]uint64]bool
 }
 
 func (l *liveLog) Kick(id uint64, _, _ string, _ time.Time) { l.kicked = append(l.kicked, id) }
@@ -182,7 +189,8 @@ func (l *liveLog) Mute(uint64, time.Time)                   {}
 func (l *liveLog) RemoveMessage(m message.Message)          { l.removed = append(l.removed, m.ID) }
 func (l *liveLog) RemoveMedia(uint64)                       {}
 func (l *liveLog) UpdateUser(user.User)                     {}
-func (l *liveLog) DoorOpen(a, b uint64) bool                { return l.doors[[2]uint64{min(a, b), max(a, b)}] }
+func (l *liveLog) PhotosShared(a, b uint64) bool            { return l.shared[[2]uint64{min(a, b), max(a, b)}] }
+func (l *liveLog) ThankReporters(ids []uint64)              { l.thanked = append(l.thanked, ids...) }
 
 // --- harness ---
 
@@ -202,7 +210,7 @@ func newFixture(t *testing.T) *fixture {
 		store:  &memStore{ipBans: map[string]time.Time{}},
 		msgs:   &memMessages{byID: map[uint64]message.Message{}, hidden: map[uint64]bool{}},
 		images: &memImages{byID: map[uint64]media.Media{}, hidden: map[uint64]bool{}, removed: map[uint64]bool{}},
-		live:   &liveLog{doors: map[[2]uint64]bool{}},
+		live:   &liveLog{shared: map[[2]uint64]bool{}},
 		users:  users,
 		words:  filter.NewLive(filter.New(100, nil)),
 	}
@@ -274,11 +282,15 @@ func TestReportVisibilityAndAutoHide(t *testing.T) {
 	}
 
 	// Two reports on the room message reach the auto-hide threshold.
-	f.svc.Report(ctx, b, in(11))
+	if err := f.svc.Report(ctx, b, in(11)); err != nil {
+		t.Fatal(err)
+	}
 	if f.msgs.hidden[11] {
 		t.Fatal("hidden too early")
 	}
-	f.svc.Report(ctx, c, in(11))
+	if err := f.svc.Report(ctx, c, in(11)); err != nil {
+		t.Fatal(err)
+	}
 	if !f.msgs.hidden[11] || len(f.live.removed) != 1 {
 		t.Fatal("message should be auto-hidden and pulled from live screens")
 	}
@@ -346,9 +358,11 @@ func TestImageReportsNeedVisibilityAndOnlyHide(t *testing.T) {
 	if err := report(b); !errors.Is(err, ErrNotVisible) {
 		t.Fatalf("unseen image: %v", err)
 	}
-	// Once a door opens, the other side sees the photo and may report it.
-	f.users.UpdateCard(ctx, owner.UserID, nil, "", "", ptr(uint64(5)))
-	f.live.doors[[2]uint64{min(owner.UserID, b.UserID), max(owner.UserID, b.UserID)}] = true
+	// Once both choose to get closer, the other side sees the photo and may report it.
+	if err := f.users.UpdateCard(ctx, owner.UserID, nil, "", "", ptr(uint64(5))); err != nil {
+		t.Fatal(err)
+	}
+	f.live.shared[[2]uint64{min(owner.UserID, b.UserID), max(owner.UserID, b.UserID)}] = true
 	if err := report(b); err != nil {
 		t.Fatalf("photo revealed through a door: %v", err)
 	}
@@ -384,16 +398,22 @@ func TestDismissRestoresAutoHiddenMessageButNotRemovedOnes(t *testing.T) {
 	f.msgs.byID[11] = message.NewRoom(11, 1, a.UserID, "a", "fine actually", 0)
 	f.msgs.byID[12] = message.NewRoom(12, 1, a.UserID, "a", "really bad", 0)
 	for _, who := range []auth.Identity{b, c} {
-		f.svc.Report(ctx, who, ReportInput{TargetType: TargetMessage, TargetID: 11, Reason: "spam"})
+		if err := f.svc.Report(ctx, who, ReportInput{TargetType: TargetMessage, TargetID: 11, Reason: "spam"}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if !f.msgs.hidden[11] {
 		t.Fatal("auto-hide expected")
 	}
-	f.svc.Dismiss(ctx, mod, 1)
+	if err := f.svc.Dismiss(ctx, mod, 1); err != nil {
+		t.Fatal(err)
+	}
 	if !f.msgs.hidden[11] {
 		t.Fatal("restored while a report is still open")
 	}
-	f.svc.Dismiss(ctx, mod, 2)
+	if err := f.svc.Dismiss(ctx, mod, 2); err != nil {
+		t.Fatal(err)
+	}
 	if f.msgs.hidden[11] {
 		t.Fatal("all reports dismissed: the message should be back")
 	}
@@ -404,7 +424,9 @@ func TestDismissRestoresAutoHiddenMessageButNotRemovedOnes(t *testing.T) {
 	}
 	f.store.reports = append(f.store.reports, Report{ID: 99, TargetType: TargetMessage, TargetID: 12, Status: StatusOpen})
 	f.store.reports = append(f.store.reports, Report{ID: 98, TargetType: TargetMessage, TargetID: 12, Status: StatusActioned})
-	f.svc.Dismiss(ctx, mod, 99)
+	if err := f.svc.Dismiss(ctx, mod, 99); err != nil {
+		t.Fatal(err)
+	}
 	if !f.msgs.hidden[12] {
 		t.Fatal("a moderator's removal must stand")
 	}
@@ -428,9 +450,33 @@ func TestContentRemovalFollowsTheRoleLadder(t *testing.T) {
 	}
 	// Reports on staff content wait for a human: never auto-hidden.
 	for _, who := range []auth.Identity{b, c} {
-		f.svc.Report(ctx, who, ReportInput{TargetType: TargetMessage, TargetID: 30, Reason: "spam"})
+		if err := f.svc.Report(ctx, who, ReportInput{TargetType: TargetMessage, TargetID: 30, Reason: "spam"}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if f.msgs.hidden[30] {
 		t.Fatal("staff content must not be auto-hidden")
+	}
+}
+
+func TestRemovalThanksEveryoneWhoReported(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	a := f.person(t, "a", user.KindGuest, user.RoleUser)
+	b := f.person(t, "b", user.KindGuest, user.RoleUser)
+	c := f.person(t, "c", user.KindGuest, user.RoleUser)
+	mod := f.person(t, "mod", user.KindMember, user.RoleModerator)
+	f.msgs.byID[40] = message.NewRoom(40, 1, a.UserID, "a", "rude", 0)
+	for _, who := range []auth.Identity{b, c} {
+		if err := f.svc.Report(ctx, who, ReportInput{TargetType: TargetMessage, TargetID: 40, Reason: "harassment"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := f.svc.RemoveMessage(ctx, mod, 40); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(f.live.thanked, []uint64{b.UserID, c.UserID}) {
+		t.Fatalf("thanked %v, want both reporters", f.live.thanked)
 	}
 }

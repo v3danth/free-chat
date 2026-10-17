@@ -88,26 +88,36 @@ func serveMark(w http.ResponseWriter, r *http.Request, defaultStyle string) {
 		httpx.Error(w, err)
 		return
 	}
-	m := For2(name)
-	var data []byte
-	if style == StylePoly {
-		data = MarkSVG(m, q.Get("anim") == "1")
-		w.Header().Set("Content-Type", "image/svg+xml")
-	} else {
-		if data, err = MarkPNG(m, scale); err != nil {
-			httpx.Error(w, err)
-			return
-		}
-		w.Header().Set("Content-Type", "image/png")
+	anim := q.Get("anim") == "1"
+	key := VersionV2 + "|" + style + "|" + strconv.Itoa(scale) + "|" + strconv.FormatBool(anim) + "|" + name
+	p, err := marks.payload(key, func() (httpx.Payload, error) { return drawMark(name, style, scale, anim) })
+	if err != nil {
+		httpx.Error(w, err)
+		return
 	}
 	if q.Has("style") {
 		cacheForever(w)
 	} else {
-		// The default style is config, so it may change: cache for a day.
+		// The default style is config, so it may change: cache for a day,
+		// then revalidate cheaply against the ETag.
 		w.Header().Set("Cache-Control", "public, max-age=86400")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
 	}
-	w.Write(data)
+	p.Serve(w, r)
+}
+
+// marks holds drawn V2 faces; see renderCache.
+var marks = newRenderCache(renderBudget)
+
+func drawMark(name, style string, scale int, anim bool) (httpx.Payload, error) {
+	m := For2(name)
+	if style == StylePoly {
+		return httpx.NewPayload("image/svg+xml", MarkSVG(m, anim)), nil
+	}
+	data, err := MarkPNG(m, scale)
+	if err != nil {
+		return httpx.Payload{}, err
+	}
+	return httpx.NewPayload("image/png", data), nil
 }
 
 func serveMarkInfo(w http.ResponseWriter, r *http.Request) {

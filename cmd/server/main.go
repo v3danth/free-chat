@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
+	"net/http/pprof"
 	"os/signal"
 	"syscall"
 	"time"
@@ -18,13 +20,16 @@ import (
 	"github.com/v3danth/free-chat/internal/database"
 	"github.com/v3danth/free-chat/internal/filter"
 	"github.com/v3danth/free-chat/internal/geo"
+	"github.com/v3danth/free-chat/internal/gifs"
 	"github.com/v3danth/free-chat/internal/httpx"
 	"github.com/v3danth/free-chat/internal/id"
 	"github.com/v3danth/free-chat/internal/janitor"
+	"github.com/v3danth/free-chat/internal/letters"
 	"github.com/v3danth/free-chat/internal/media"
 	"github.com/v3danth/free-chat/internal/message"
 	"github.com/v3danth/free-chat/internal/moderation"
 	"github.com/v3danth/free-chat/internal/ratelimit"
+	"github.com/v3danth/free-chat/internal/static"
 	"github.com/v3danth/free-chat/internal/user"
 	"github.com/v3danth/free-chat/internal/websocket"
 )
@@ -41,6 +46,8 @@ func main() {
 // adds each, so an out-of-date database is caught at startup.
 var schema = []database.Requirement{
 	{Table: "users", Column: "tags", Migration: "migrations/002_tags.sql"},
+	{Table: "users", Column: "aura", Migration: "migrations/004_warmth.sql"},
+	{Table: "letters", Column: "deliver_at", Migration: "migrations/004_warmth.sql"},
 }
 
 func run() error {
@@ -82,8 +89,12 @@ func run() error {
 	}
 	mediaSvc := media.NewService(media.NewRepository(db), storage)
 
+	gifLib, err := gifs.New(cfg.GIFProvider, cfg.GIFAPIKey)
+	if err != nil {
+		return err
+	}
+
 	words := filter.NewLive(filter.New(cfg.MessageMaxLength, nil))
-	authSvc := auth.NewService(users, auth.NewTokens(cfg.JWTSecret), modStore, locator, words, cfg.JWTSecret)
 
 	// The message log is written in the background; it gets its own context
 	// so it can drain after the HTTP server and sockets are gone.
@@ -95,10 +106,14 @@ func run() error {
 		<-writer.Done()
 	}()
 
-	hub, err := newHub(ctx, cfg, messages, writer, mediaSvc, users, blocks, words)
+	letterStore := letters.NewStore(db)
+	hub, err := newHub(ctx, cfg, messages, writer, mediaSvc, users, blocks, words, letterStore)
 	if err != nil {
 		return err
 	}
+	go letters.Run(ctx, letterStore, hub, time.Minute)
+	// The hub knows who is online, which decides when a guest name is free.
+	authSvc := auth.NewService(users, auth.NewTokens(cfg.JWTSecret), modStore, hub, locator, words, cfg.JWTSecret)
 
 	modSvc := moderation.NewService(moderation.Deps{
 		Store: modStore, Users: users, Messages: messages, Writer: writer, Images: mediaSvc,
@@ -116,11 +131,12 @@ func run() error {
 
 	ipOf := httpx.NewIPResolver(cfg.BehindProxy)
 	mux := http.NewServeMux()
-	mux.Handle("GET /", http.FileServer(http.Dir("./web")))
+	mux.Handle("GET /", static.New("./web"))
 	mux.HandleFunc("GET /faces", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "./web/faces.html") })
 	avatar.Routes(mux, cfg.AvatarStyle)
 	auth.Routes(mux, authSvc, ipOf)
 	media.Routes(mux, mediaSvc, authSvc, ipOf, cfg.MediaMaxUploadSize)
+	gifs.Routes(mux, gifLib, mediaSvc, authSvc, ipOf, cfg.MediaMaxUploadSize)
 	websocket.Routes(mux, hub, authSvc, users, ipOf)
 	moderation.Routes(mux, modSvc, authSvc, ipOf)
 	admin.Routes(mux, admin.NewService(db, hub, users, authSvc, modStore), authSvc, ipOf)
@@ -128,6 +144,10 @@ func run() error {
 	go janitor.Run(ctx, janitor.NewMySQLStore(db), mediaSvc, hub, janitor.Config{
 		Retention: cfg.Retention, Interval: cfg.JanitorInterval,
 	})
+
+	if cfg.PprofAddr != "" {
+		go serveProfiler(cfg.PprofAddr)
+	}
 
 	server := &http.Server{
 		Addr:              ":" + cfg.ServerPort,
@@ -165,6 +185,7 @@ func run() error {
 // room is served from memory.
 func newHub(ctx context.Context, cfg config.Config, messages *message.MySQLRepository, writer *message.Writer,
 	mediaSvc *media.Service, users *user.MySQLRepository, blocks *block.MySQLRepository, words *filter.Live,
+	letterStore *letters.MySQLStore,
 ) (*websocket.Hub, error) {
 	rooms, err := messages.LiveRooms(ctx)
 	if err != nil {
@@ -179,8 +200,11 @@ func newHub(ctx context.Context, cfg config.Config, messages *message.MySQLRepos
 	return websocket.NewHub(websocket.Deps{
 		Writer: writer, IDs: &id.Generator{}, Media: mediaSvc, Users: users, Blocks: blocks,
 		Limiter:      ratelimit.New(ratelimit.Config{Rate: cfg.MessageRateLimit, Window: cfg.MessageRateWindow}),
+		KnockLimiter: ratelimit.New(ratelimit.Config{Rate: cfg.KnockRateLimit, Window: cfg.KnockRateWindow}),
 		Filter:       words,
 		HistoryLimit: cfg.MessageHistoryLimit,
+		Letters:      letterStore,
+		LetterDelay:  cfg.LetterDelay,
 	}, rooms, recent), nil
 }
 
@@ -193,5 +217,19 @@ func openGeo(path string) (geo.Locator, func(), error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("open geoip database: %w", err)
 	}
-	return db, func() { db.Close() }, nil
+	return db, func() { _ = db.Close() }, nil
+}
+
+// serveProfiler exposes Go's profiler on its own loopback listener, apart
+// from the public mux, so profiling can never be reached from outside.
+func serveProfiler(addr string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	slog.Info("profiler listening", "addr", addr)
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	if err := srv.ListenAndServe(); err != nil {
+		slog.Error("profiler stopped", "err", err)
+	}
 }

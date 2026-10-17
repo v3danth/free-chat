@@ -10,6 +10,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
+<!-- app.js imports these; preloading starts them with app.js, not after it. -->
+<link rel="modulepreload" href="/store.js">
+<link rel="modulepreload" href="/machine.js">
+<link rel="modulepreload" href="/sounds.js">
 </head>
 <body>
 <div id="app"></div>

@@ -43,7 +43,9 @@ type Store interface {
 	WasActioned(ctx context.Context, t TargetType, targetID uint64) (bool, error)
 	ListReports(ctx context.Context, status Status, limit int) ([]Report, error)
 	SetReportStatus(ctx context.Context, id uint64, status Status, actor uint64) error
-	ResolveTarget(ctx context.Context, t TargetType, targetID uint64, status Status, actor uint64) error
+	// ResolveTarget closes every open report on a target and returns who
+	// filed them.
+	ResolveTarget(ctx context.Context, t TargetType, targetID uint64, status Status, actor uint64) ([]uint64, error)
 	Log(ctx context.Context, a Action) error
 	ListActions(ctx context.Context, limit int) ([]Action, error)
 }
@@ -85,9 +87,11 @@ type Live interface {
 	RemoveMessage(m message.Message)
 	RemoveMedia(mediaID uint64)
 	UpdateUser(u user.User)
-	// DoorOpen: a and b have an open private chat, so each sees the
+	// PhotosShared: a and b both chose to get closer, so each sees the
 	// other's profile photo.
-	DoorOpen(a, b uint64) bool
+	PhotosShared(a, b uint64) bool
+	// ThankReporters tells reporters that their report led to action.
+	ThankReporters(ids []uint64)
 }
 
 type Deps struct {
@@ -227,7 +231,7 @@ func (s *Service) imageSeenBy(ctx context.Context, m media.Media, viewer uint64)
 	if err != nil {
 		return false, err
 	}
-	return owner.PhotoID != nil && *owner.PhotoID == m.ID && s.Live.DoorOpen(viewer, owner.ID), nil
+	return owner.PhotoID != nil && *owner.PhotoID == m.ID && s.Live.PhotosShared(viewer, owner.ID), nil
 }
 
 // maybeAutoHide takes reported content down pending review once enough
@@ -527,11 +531,14 @@ func (s *Service) target(ctx context.Context, actor auth.Identity, userID uint64
 	return u, nil
 }
 
-// closeOut marks every open report on the target as actioned and logs.
+// closeOut marks every open report on the target as actioned, thanks the
+// people who filed them, and logs.
 func (s *Service) closeOut(ctx context.Context, actor auth.Identity, a Action, t TargetType, targetID uint64) error {
-	if err := s.Store.ResolveTarget(ctx, t, targetID, StatusActioned, actor.UserID); err != nil {
+	reporters, err := s.Store.ResolveTarget(ctx, t, targetID, StatusActioned, actor.UserID)
+	if err != nil {
 		return err
 	}
+	s.Live.ThankReporters(reporters)
 	return s.log(ctx, actor, a)
 }
 

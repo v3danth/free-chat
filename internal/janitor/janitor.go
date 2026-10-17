@@ -1,5 +1,5 @@
-// Package janitor enforces retention: old messages, guests who left long
-// ago (with their image files), and expired IP bans.
+// Package janitor enforces retention: old messages and letters, guests who
+// left long ago (with their image files), and expired IP bans.
 package janitor
 
 import (
@@ -21,6 +21,8 @@ type Store interface {
 	// ids and the file keys of their images, whose rows the delete cascades away.
 	ExpireGuests(ctx context.Context, cutoff time.Time, online []uint64) (guests []uint64, keys []string, err error)
 	PurgeExpiredIPBans(ctx context.Context) (int64, error)
+	// PurgeLetters deletes letters written before cutoff, delivered or not.
+	PurgeLetters(ctx context.Context, cutoff uint64) (int64, error)
 }
 
 type Files interface {
@@ -86,6 +88,9 @@ func Sweep(ctx context.Context, store Store, files Files, online Live, retention
 	if _, err := store.PurgeExpiredIPBans(ctx); err != nil {
 		log.Printf("janitor: purge ip bans: %v", err)
 	}
+	if _, err := store.PurgeLetters(ctx, id.Floor(cutoff)); err != nil {
+		log.Printf("janitor: purge letters: %v", err)
+	}
 	if purged > 0 || len(keys) > 0 {
 		log.Printf("janitor: purged %d messages, %d guest images", purged, len(keys))
 	}
@@ -136,6 +141,14 @@ func (s *MySQLStore) ExpireGuests(ctx context.Context, cutoff time.Time, online 
 		return nil, nil, err
 	}
 	return guests, keys, tx.Commit()
+}
+
+func (s *MySQLStore) PurgeLetters(ctx context.Context, cutoff uint64) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM letters WHERE id < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func (s *MySQLStore) PurgeExpiredIPBans(ctx context.Context) (int64, error) {

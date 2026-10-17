@@ -104,7 +104,7 @@ func eyeMask(kind string, s int, p Palette) eye {
 		for y := range h {
 			for x := range w {
 				corner := (x == 0 || x == w-1) && (y == 0 || y == h-1)
-				if !(cut && corner) {
+				if !cut || !corner {
 					px = append(px, eyePixel{x, y, c})
 				}
 			}

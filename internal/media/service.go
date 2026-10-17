@@ -63,6 +63,9 @@ func (s *Service) Upload(ctx context.Context, owner uint64, raw []byte) (Media, 
 
 	// Random, unguessable names: a private photo's URL is its capability.
 	key := strings.ToLower(rand.Text())
+	if p.Animated {
+		key = mediapath.AnimatedPrefix + key[1:] // still 125 random bits
+	}
 	if err := s.storage.SaveAll(key, map[mediapath.Variant][]byte{
 		mediapath.Full: p.Full, mediapath.Thumb: p.Thumb,
 	}); err != nil {

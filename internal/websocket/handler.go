@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/websocket"
 
@@ -16,13 +17,19 @@ import (
 // CheckOrigin is left nil: gorilla then rejects cross-origin browser
 // handshakes, while non-browser clients (no Origin header) are allowed.
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	ReadBufferSize: 1024,
+	// A hello carries everyone's card (240 KB at 1000 online): a 16 KB
+	// buffer writes it in 15 syscalls rather than 240. Buffers are borrowed
+	// from the pool only while a frame is written, so idle sockets hold none.
+	WriteBufferSize:   16 << 10,
+	WriteBufferPool:   &sync.Pool{},
+	EnableCompression: true,
 }
 
 type Profiles interface {
 	GetByID(ctx context.Context, id uint64) (user.User, error)
 	UpdateCard(ctx context.Context, id uint64, tags []string, about, location string, photoID *uint64) error
+	UpdateSettings(ctx context.Context, id uint64, s user.Settings) error
 }
 
 func Routes(mux *http.ServeMux, hub *Hub, authSvc *auth.Service, profiles Profiles, ipOf httpx.IPResolver) {
@@ -73,12 +80,48 @@ func (h handler) me(w http.ResponseWriter, r *http.Request, id auth.Identity) {
 }
 
 // cardUpdate is a partial update: an absent field keeps its value. PhotoID
-// stays raw to tell "absent" (keep) from null (clear).
+// stays raw to tell "absent" (keep) from null (clear); an empty aura
+// clears it.
 type cardUpdate struct {
-	Tags     *[]string       `json:"tags"`
-	About    *string         `json:"about"`
-	Location *string         `json:"location"`
-	PhotoID  json.RawMessage `json:"photo_id"`
+	Tags       *[]string       `json:"tags"`
+	About      *string         `json:"about"`
+	Location   *string         `json:"location"`
+	PhotoID    json.RawMessage `json:"photo_id"`
+	Aura       *string         `json:"aura"`
+	KnocksFrom *string         `json:"knocks_from"`
+	HideGender *bool           `json:"hide_gender"`
+}
+
+// changesCard reports whether the update touches the card itself, so
+// switching a setting costs no rewrite of the card.
+func (req cardUpdate) changesCard() bool {
+	return req.Tags != nil || req.About != nil || req.Location != nil || len(req.PhotoID) > 0
+}
+
+// changesSettings reports whether the update touches any setting, so a
+// plain card edit costs no extra write.
+func (req cardUpdate) changesSettings() bool {
+	return req.Aura != nil || req.KnocksFrom != nil || req.HideGender != nil
+}
+
+// applySettings merges the update into the current settings, parsing each
+// field it sets.
+func (req cardUpdate) applySettings(s user.Settings) (user.Settings, error) {
+	var err error
+	if req.Aura != nil {
+		if s.Aura, err = user.ParseAura(*req.Aura); err != nil {
+			return s, err
+		}
+	}
+	if req.KnocksFrom != nil {
+		if s.KnocksFrom, err = user.ParseKnockPolicy(*req.KnocksFrom); err != nil {
+			return s, err
+		}
+	}
+	if req.HideGender != nil {
+		s.HideGender = *req.HideGender
+	}
+	return s, nil
 }
 
 var (
@@ -126,6 +169,20 @@ func (req cardUpdate) apply(u user.User) (user.Profile, *uint64, error) {
 	return p, photo, nil
 }
 
+// updated is the user after an edit, built from what is already known.
+// Only a new photo needs a read, for the file key that names its URL.
+func (h handler) updated(ctx context.Context, current user.User, p user.Profile, photo *uint64, s user.Settings) (user.User, error) {
+	if photo != nil && (current.PhotoID == nil || *photo != *current.PhotoID || current.PhotoKey == nil) {
+		return h.profiles.GetByID(ctx, current.ID)
+	}
+	fresh := current
+	fresh.Profile, fresh.Settings = p, s
+	if photo == nil {
+		fresh.PhotoID, fresh.PhotoKey = nil, nil
+	}
+	return fresh, nil
+}
+
 // updateMe edits the card fields others see. Name, age and gender are fixed
 // for the visit: changing them mid-chat would make impersonation trivial.
 func (h handler) updateMe(w http.ResponseWriter, r *http.Request, id auth.Identity) {
@@ -141,19 +198,33 @@ func (h handler) updateMe(w http.ResponseWriter, r *http.Request, id auth.Identi
 	}
 
 	p, photo, err := req.apply(current)
-	if err == nil {
-		p, err = p.Screened(h.hub.Filter.Load().Screen)
+	if err != nil {
+		httpx.Error(w, err)
+		return
 	}
+	if p, err = p.Screened(h.hub.Filter.Load().Screen); err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	settings, err := req.applySettings(current.Settings)
 	if err != nil {
 		httpx.Error(w, err)
 		return
 	}
 
-	if err := h.profiles.UpdateCard(r.Context(), id.UserID, p.Tags, p.About, p.Location, photo); err != nil {
-		httpx.Error(w, err)
-		return
+	if req.changesCard() {
+		if err := h.profiles.UpdateCard(r.Context(), id.UserID, p.Tags, p.About, p.Location, photo); err != nil {
+			httpx.Error(w, err)
+			return
+		}
 	}
-	fresh, err := h.profiles.GetByID(r.Context(), id.UserID)
+	if req.changesSettings() {
+		if err := h.profiles.UpdateSettings(r.Context(), id.UserID, settings); err != nil {
+			httpx.Error(w, err)
+			return
+		}
+	}
+	fresh, err := h.updated(r.Context(), current, p, photo, settings)
 	if err != nil {
 		httpx.Error(w, err)
 		return

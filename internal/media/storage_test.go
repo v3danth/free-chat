@@ -30,7 +30,9 @@ func TestHideRestoreDelete(t *testing.T) {
 	if ok, _ := s.Restore("k"); ok {
 		t.Fatal("restoring an image that is not hidden must report false")
 	}
-	s.Hide("k")
+	if err := s.Hide("k"); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.DeleteAll("k"); err != nil {
 		t.Fatal(err)
 	}

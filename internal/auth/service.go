@@ -23,6 +23,8 @@ var (
 	ErrBanned             = apperr.New(apperr.Forbidden, "you are banned")
 	ErrTooManySignups     = apperr.New(apperr.RateLimited, "too many new profiles from your network, try again later")
 	ErrTooManyLogins      = apperr.New(apperr.RateLimited, "too many sign-in attempts, try again in a few minutes")
+	ErrNameInUse          = apperr.New(apperr.Conflict, "someone here is using that name")
+	ErrNameClaimed        = apperr.New(apperr.Unauthorized, "someone took your name while you were away, pick another")
 )
 
 // dummyHash lets Login spend the same bcrypt time whether or not the email
@@ -31,6 +33,12 @@ var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("timing-equalizer"), bcryp
 
 type IPBans interface {
 	IsIPBanned(ctx context.Context, ipHash []byte) (bool, error)
+}
+
+// Presence answers who is connected right now. A name belongs to whoever
+// is online with it; only a name nobody is using may change hands.
+type Presence interface {
+	IsNameOnline(name string) bool
 }
 
 // Identity is a resumed, live caller.
@@ -74,27 +82,29 @@ type Credentials struct {
 }
 
 type Service struct {
-	users   user.Repository
-	tokens  Tokens
-	ipBans  IPBans
-	geo     geo.Locator
-	words   *filter.Live
-	ipKey   []byte
-	signups *ratelimit.Limiter
+	users    user.Repository
+	tokens   Tokens
+	ipBans   IPBans
+	presence Presence
+	geo      geo.Locator
+	words    *filter.Live
+	ipKey    []byte
+	signups  *ratelimit.Limiter
 	// Sign-in attempts, per IP and per email: both are checked before the
 	// (deliberately slow) password comparison.
 	loginsByIP    *ratelimit.Limiter
 	loginsByEmail *ratelimit.Limiter
 }
 
-func NewService(users user.Repository, tokens Tokens, ipBans IPBans, locator geo.Locator, words *filter.Live, ipKey string) *Service {
+func NewService(users user.Repository, tokens Tokens, ipBans IPBans, presence Presence, locator geo.Locator, words *filter.Live, ipKey string) *Service {
 	return &Service{
-		users:  users,
-		tokens: tokens,
-		ipBans: ipBans,
-		geo:    locator,
-		words:  words,
-		ipKey:  []byte(ipKey),
+		users:    users,
+		tokens:   tokens,
+		ipBans:   ipBans,
+		presence: presence,
+		geo:      locator,
+		words:    words,
+		ipKey:    []byte(ipKey),
 		// Generous: Indian mobile carriers put many people behind one IP.
 		signups:       ratelimit.New(ratelimit.Config{Rate: 30, Window: 10 * time.Minute}),
 		loginsByIP:    ratelimit.New(ratelimit.Config{Rate: 20, Window: 10 * time.Minute}),
@@ -118,7 +128,7 @@ func (s *Service) CreateGuest(ctx context.Context, g GuestSignup) (Session, erro
 	if !s.signups.Allow(bucket(ipHash)) {
 		return Session{}, ErrTooManySignups
 	}
-	profile, err := g.Profile.Screened(s.words.Load().Screen)
+	profile, err := s.screenedFreeName(g.Profile)
 	if err != nil {
 		return Session{}, err
 	}
@@ -132,7 +142,33 @@ func (s *Service) CreateGuest(ctx context.Context, g GuestSignup) (Session, erro
 	if err != nil {
 		return Session{}, err
 	}
+	if err := s.claimName(ctx, u); err != nil {
+		return Session{}, err
+	}
 	return s.session(u)
+}
+
+// screenedFreeName screens a new profile and refuses a name that someone
+// online answers to, so nobody can join as a person who is in the room.
+func (s *Service) screenedFreeName(p user.Profile) (user.Profile, error) {
+	profile, err := p.Screened(s.words.Load().Screen)
+	if err != nil {
+		return user.Profile{}, err
+	}
+	if s.presence.IsNameOnline(profile.Name) {
+		return user.Profile{}, ErrNameInUse
+	}
+	return profile, nil
+}
+
+// claimName gives u a name its old owner left behind: guests who held it
+// lose their sessions, so two people never answer to one name, and they
+// are told why when they come back (see sessionEndReason).
+func (s *Service) claimName(ctx context.Context, u user.User) error {
+	if err := s.users.RevokeGuestsNamed(ctx, u.Profile.Name, u.ID); err != nil {
+		return fmt.Errorf("revoke guests named like user %d: %w", u.ID, err)
+	}
+	return nil
 }
 
 func (s *Service) Register(ctx context.Context, reg Registration) (user.User, error) {
@@ -143,11 +179,18 @@ func (s *Service) Register(ctx context.Context, reg Registration) (user.User, er
 	if !s.signups.Allow(bucket(ipHash)) {
 		return user.User{}, ErrTooManySignups
 	}
-	profile, err := reg.Profile.Screened(s.words.Load().Screen)
+	profile, err := s.screenedFreeName(reg.Profile)
 	if err != nil {
 		return user.User{}, err
 	}
-	return s.createMember(ctx, profile, reg.Email, reg.Password, user.RoleUser, s.geo.Country(reg.Origin.IP), ipHash)
+	u, err := s.createMember(ctx, profile, reg.Email, reg.Password, user.RoleUser, s.geo.Country(reg.Origin.IP), ipHash)
+	if err != nil {
+		return user.User{}, err
+	}
+	if err := s.claimName(ctx, u); err != nil {
+		return user.User{}, err
+	}
+	return u, nil
 }
 
 var errStaffRole = apperr.New(apperr.Invalid, "staff role must be moderator or admin")
@@ -207,7 +250,7 @@ func (s *Service) Resume(ctx context.Context, token string, origin Origin) (user
 		return user.User{}, err
 	}
 	if u.TokenVersion != version {
-		return user.User{}, ErrSessionEnded
+		return user.User{}, s.sessionEndReason(ctx, u)
 	}
 	if u.BannedAt(time.Now()) {
 		return user.User{}, ErrBanned
@@ -216,6 +259,23 @@ func (s *Service) Resume(ctx context.Context, token string, origin Origin) (user
 		return user.User{}, err
 	}
 	return u, nil
+}
+
+// sessionEndReason explains a revoked token. A guest whose name was taken
+// while they were away must pick a new one; anything else (a ban, a role
+// change) just asks them to join again.
+func (s *Service) sessionEndReason(ctx context.Context, u user.User) error {
+	if u.Kind != user.KindGuest {
+		return ErrSessionEnded
+	}
+	claimed, err := s.users.IsGuestNameClaimedSince(ctx, u.Profile.Name, u.ID)
+	if err != nil {
+		return fmt.Errorf("check name claim for user %d: %w", u.ID, err)
+	}
+	if claimed {
+		return ErrNameClaimed
+	}
+	return ErrSessionEnded
 }
 
 // EnsureAdmin creates the configured admin member, or promotes the member

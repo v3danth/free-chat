@@ -4,7 +4,14 @@ All bodies are JSON. Every error is `{"error": "<message>"}` with a meaningful
 status; internal failures return `500` with a generic message.
 
 Authenticated HTTP calls send `Authorization: Bearer <token>`. Tokens last 24
-hours and are revoked instantly by a ban.
+hours and are revoked instantly by a ban, or for a guest when someone else
+claims their name (see 1). A revoked guest token answers `401` with "someone
+took your name while you were away, pick another"; any other revocation
+answers "session ended, please join again".
+
+The web client keeps the token, the card and past private chats in
+`localStorage`, so a closed tab comes back logged in within the 24 hours, and
+"Continue as <name>" afterwards. Leave wipes all three from the device.
 
 ---
 
@@ -20,7 +27,7 @@ A one-visit profile card. No email, no password.
 
 | Field | Rule |
 |---|---|
-| name | 2–32 letters/digits/underscore in any script, single inner spaces; staff words (admin, moderator, ...) reserved; not unique for guests |
+| name | 2–32 letters/digits/underscore in any script, single inner spaces; staff words (admin, moderator, ...) reserved; a name someone online uses (ignoring case) is refused with `409`; a guest name frees once its owner leaves, and the next guest or member to claim it revokes the old owner's token |
 | gender | male, female, non-binary, femboy, other, couple |
 | age | 18–99 |
 | tags | "Here to": up to 3 free-form tags, 1-20 letters, numbers, spaces, `_` or `-` each, any script; duplicates ignoring case are dropped; optional |
@@ -44,11 +51,17 @@ At most 8 attempts per email and 20 per network in 10 minutes, then `429`
 (even with the right password, until the window ends).
 
 ### GET /me → 200, PATCH /me → 200
-PATCH changes only `tags`, `about`, `location` and `photo_id` (an image you
-uploaded; `null` clears it). Fields you leave out keep their value. Name,
-age and gender are fixed for the visit. Only members can set a photo;
-guests get `403` and are always shown as their face.
+PATCH changes only `tags`, `about`, `location`, `photo_id` (an image you
+uploaded; `null` clears it) and the settings below. Fields you leave out
+keep their value. Name, age and gender are fixed for the visit. Only members
+can set a photo; guests get `403` and are always shown as their face.
 Everyone online receives a `presence` update.
+
+| Setting | Values | Effect |
+|---|---|---|
+| aura | ember, rose, lantern, peach, dusk, sea, or `""` | A glow around the face; anyone may pick any aura |
+| knocks_from | anyone (default), members, nobody | Who may start a private chat with you |
+| hide_gender | true, false | Strangers' Cards leave out `gender`; people you talk to still see it |
 
 ### Card and Self
 ```json
@@ -60,16 +73,22 @@ Everyone online receives a `presence` update.
   "has_photo": true,
   "online_since": 1791490000,
   "avatar_url": "/avatar/v2/<name>",
-  "avatar_tier": "adept"
+  "avatar_tier": "adept",
+  "aura": "rose"
 }
 ```
 - `avatar_url` is everyone's society mark, drawn from their name, and
   `avatar_tier` its rank (section 2c).
 - `country` is ISO 3166-1 alpha-2 from the visitor's IP at sign-up (empty
   when unknown). Render it as an SVG flag, not an emoji.
+- `gender` is absent when the person hides it from strangers; it arrives
+  in the `door` event once a chat opens. Clients colour names by gender
+  only inside an open chat, so nobody can scan the room for women.
+- `aura` is absent when unset.
 - A Card never carries a photo: everyone is shown as their face.
-  `has_photo` says a member has one. `photo_url` appears in
-  `Self` and in a `door` event: after a knock is answered.
+  `has_photo` says a member has one. `photo_url` appears in `Self` and in a
+  `closer` event once both people choose to get closer.
+- `Self` also carries `knocks_from` and `hide_gender`.
 
 ---
 
@@ -87,8 +106,31 @@ and GPS data.
 Errors: 413 too large, 415 not an image, 403 a banned image, 429 more than
 20 uploads in 10 minutes.
 
-### GET /media/{full|thumb|blur}/{key}.jpg
+An animated GIF (two or more frames) stays animated: it is re-encoded as a
+GIF (frames, palettes and timing only; comments and trailing bytes are
+dropped), the response adds `"animated": true`, and both URLs end in `.gif`.
+Animated GIFs over 1280 px a side, 600 frames or 64 megapixels summed over
+frames become a still JPEG of the first frame. Sending an image you
+uploaded earlier again (by `media_id`) is allowed.
+
+### GET /media/{full|thumb}/{key}.jpg and {key}.gif
 Static, immutable (cached for a year). A removed image's files are deleted.
+Keys starting with `0` are animated GIFs.
+
+### GET /gifs?q=&next= → 200
+GIF library search (trending when `q` is empty), only when the server sets
+`GIF_PROVIDER` (giphy, rating r; or tenor, contentfilter off) and
+`GIF_API_KEY`; otherwise `404`. 60 searches a minute per person.
+```json
+{ "results": [{ "id": "abc", "title": "...", "preview_url": "https://media.giphy.com/...", "width": 200, "height": 150 }],
+  "next": "24", "provider": "giphy" }
+```
+Show the provider's attribution in the picker.
+
+### POST /gifs/import → 201
+`{ "id": "abc" }`: the server fetches that GIF from the library's own media
+hosts and stores it as your upload (same limits, rate and answer as
+`POST /media/upload`). Send it with its `media_id` like any image.
 
 ---
 
@@ -147,35 +189,61 @@ frames) and the chance of each rank. The page at `/faces` uses these routes.
 
 ## 3. WebSocket: GET /ws?token=...
 
+Each frame is one JSON object. When several frames are waiting for a
+client, the server sends them as one websocket message with one frame per
+line (`\n`-separated), so a busy room costs one write instead of hundreds.
+Clients split every message on newlines before parsing.
+
 ### Server → client
 
 | type | When | Payload |
 |---|---|---|
-| `hello` | on connect | `you` (Self), `online` (Cards), `rooms` (`[{id, name}]`), `rate_limit` (`{remaining, reset_in_seconds}`: seconds left in the current window), `doors` (`[{with, open, knocked_by_me?}]`: your private chats that are still open or knocking; rebuild chat state from this after a reconnect) |
+| `hello` | on connect | `you` (Self), `online` (Cards), `rooms` (`[{id, name}]`), `rate_limit` (`{remaining, reset_in_seconds}`: seconds left in the current window), `doors` (`[{with, open, knocked_by_me?, knock?{id, from, content, ts}, asked_by_me?, asked_by_them?, close?, peer?}]`: your private chats that are still open or knocking, the waiting knock, and how far up the reveal ladder, with `peer` (Card plus `photo_url`) once close; rebuild chat state from this after a reconnect) |
 | `presence` | someone joins, edits, leaves | `event`: `join` (also a reconnect), `update`, `leave`; `user_id`; `user` (Card, not on leave) |
 | `history` | after `join` | `room_id`, `messages`: up to 20 chat events, **newest first** |
-| `chat` | a room message | `id, room_id, sender_id, name, gender, content, image?{url, thumb_url}, ts, filtered?` (`gender` is the sender's, for name colours) |
+| `chat` | a room message | `id, room_id, sender_id, name, content, image?{url, thumb_url}, ts, filtered?` |
 | `dm` | a private message (also echoed to the sender) | `id, from, to, content, image?, ts, knock?, filtered?` |
-| `door` | a knock was answered | `with`: the other person's Card plus `photo_url` |
+| `door` | a knock was answered | `with`: the other person's Card, gender included |
+| `door_closed` | a knock was declined | `with`, `reason` (`declined`), `by_me?` (true for the person who declined) |
+| `closer` | either side asks to get closer | `with`, `asked_by_me?`, `asked_by_them?`, `close?`; once `close`, `peer` is the other's Card plus `photo_url` |
+| `tomorrow` | the other side wants to pick the chat up again | `from` |
+| `letter` | a letter's time has come and you are online | `id, from, name, content, sent_at` |
+| `letter_sent` | your letter is stored | `to`, `deliver_at` |
 | `removed` | a moderator removed a message | `message_id` |
-| `notice` | muted, kicked, banned | `code, text, until?` |
-| `error` | a command failed | `error`, `code`: INVALID, FORBIDDEN, NOT_FOUND, RATE_LIMITED, ... |
+| `notice` | muted, kicked, banned, a report you filed was acted on | `code` (`muted`, `kicked`, `banned`, `report_actioned`), `text, until?` |
+| `error` | a command failed | `error`, `code`: INVALID, FORBIDDEN, NOT_FOUND, RATE_LIMITED, CONFLICT, RECONSIDER, ... |
 
 ### Client → server
 
 | type | Fields | Notes |
 |---|---|---|
 | `join` / `leave` | `room_id` | Room 1 is the main room |
-| `chat` | `room_id`, `content` and/or `media_id` | Must have joined the room |
-| `dm` | `to`, `content` and/or `media_id` | See knocking |
+| `chat` | `room_id`, `content` and/or `media_id`, `confirm?` | Must have joined the room |
+| `dm` | `to`, `content` and/or `media_id`, `confirm?` | See knocking |
+| `closer` | `user_id` | Ask to climb the reveal ladder; needs an open chat |
+| `tomorrow` | `user_id` | Tell them you would like to pick it up again; needs an open chat |
+| `decline` | `user_id` | Turn down a knock from them; only the person knocked, only before the door opens (`NOT_FOUND`) |
+| `letter` | `to`, `content`, `confirm?` | Members only, in an open chat; arrives `LETTER_DELAY` later (default 6 hours); one pending letter per person (`CONFLICT`) |
 | `block` / `unblock` | `user_id` | Mutual and silent |
 
+A message with a masked word is refused once with `RECONSIDER`, so the sender
+can rephrase; sending it again with `confirm: true` delivers it masked.
+Words that block are refused outright, as before.
+
 ### Knocking (private chat)
-1. Your first message to someone is a **knock**. It must be text: photos are
-   refused until they reply.
+1. Your first message to someone is a **knock**. It must be text. A knock
+   respects their `knocks_from` (`FORBIDDEN`), and each person may start at
+   most `KNOCK_RATE_LIMIT` chats per `KNOCK_RATE_WINDOW` (default 6 per 10
+   minutes, then `RATE_LIMITED`).
 2. Until they reply you cannot send a second message (`FORBIDDEN`).
-3. When they reply, both sides receive `door` with the other's sharp photo.
-4. The door closes when either person leaves. Messaging someone offline, or
+3. When they reply, both sides receive `door` with the other's Card. If
+   they `decline` instead, both receive `door_closed`, and the knocker may
+   not knock on them again until one of them leaves (`FORBIDDEN`).
+4. **Reveal ladder:** face, then talk, then photos. Either side sends
+   `closer`; when both have, both receive `closer` with `close` and the
+   other's `photo_url`, and photos may be sent in the chat. Before that, an
+   image in the chat is `FORBIDDEN`.
+5. The door closes when either person leaves. Messaging someone offline, or
    someone on either side of a block, returns the same `NOT_FOUND`.
 
 ---
@@ -190,12 +258,14 @@ frames) and the chance of each rank. The page at `/faces` uses these routes.
 violence, hate, underage, scam, other. You can only report what you could
 see: a private message only from inside that conversation; an image only if
 it was posted in a room, sent in one of your private chats, or is the profile
-photo of someone you have an open door with (otherwise `403`). A snapshot of
+photo of someone you have both chosen to get closer to (otherwise `403`). A snapshot of
 the evidence is kept with the report.
 
 At 3 open reports (configurable) a message or image is hidden, not deleted,
 until a moderator reviews it: removing it makes it permanent, dismissing
 every report brings it back. Staff content is never hidden automatically.
+When a moderator acts on a target, everyone online who reported it gets a
+`report_actioned` notice.
 
 ---
 

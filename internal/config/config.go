@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/v3danth/free-chat/internal/avatar"
 	"log"
+	"net"
 	"os"
 	"strconv"
 	"time"
@@ -45,10 +46,27 @@ type Config struct {
 	MessageRateLimit    int
 	MessageRateWindow   time.Duration
 
+	// KnockRateLimit caps how many new private chats one person may start
+	// per KnockRateWindow.
+	KnockRateLimit  int
+	KnockRateWindow time.Duration
+	// LetterDelay is how long a letter takes to arrive.
+	LetterDelay time.Duration
+
 	MediaStoragePath   string
 	MediaMaxUploadSize int64
 
 	ReportAutoHideThreshold int
+
+	// GIFProvider is "giphy" or "tenor"; with GIFAPIKey it turns on GIF
+	// search in the picker. Empty leaves only uploads and recents.
+	GIFProvider string
+	GIFAPIKey   string
+
+	// PprofAddr, when set, serves Go's profiler there, for finding what a
+	// slow server spends its time on. Loopback only: profiles show code
+	// paths and memory, which must not reach the internet.
+	PprofAddr string
 }
 
 // Load reads the environment once. Every missing or malformed variable is
@@ -87,10 +105,18 @@ func Load() (Config, error) {
 		MessageRateLimit:    get(e, "MESSAGE_RATE_LIMIT", 30, strconv.Atoi),
 		MessageRateWindow:   get(e, "MESSAGE_RATE_WINDOW", 60*time.Second, seconds),
 
+		KnockRateLimit:  get(e, "KNOCK_RATE_LIMIT", 6, strconv.Atoi),
+		KnockRateWindow: get(e, "KNOCK_RATE_WINDOW", 10*time.Minute, seconds),
+		LetterDelay:     get(e, "LETTER_DELAY", 6*time.Hour, seconds),
+
 		MediaStoragePath:   get(e, "MEDIA_STORAGE_PATH", "./uploads", text),
 		MediaMaxUploadSize: get(e, "MEDIA_MAX_UPLOAD_SIZE", int64(10<<20), int64s),
 
 		ReportAutoHideThreshold: get(e, "REPORT_AUTOHIDE_THRESHOLD", 3, strconv.Atoi),
+
+		GIFProvider: os.Getenv("GIF_PROVIDER"),
+		GIFAPIKey:   os.Getenv("GIF_API_KEY"),
+		PprofAddr:   os.Getenv("PPROF_ADDR"),
 	}
 
 	// Bounds that the schema or the product depend on.
@@ -98,12 +124,28 @@ func Load() (Config, error) {
 	e.check(cfg.MessageMaxLength >= 1 && cfg.MessageMaxLength <= 1000, "MESSAGE_MAX_LENGTH must be 1-1000 (messages.body is VARCHAR(1000))")
 	e.check(cfg.MessageHistoryLimit >= 0 && cfg.MessageHistoryLimit <= 50, "MESSAGE_HISTORY_LIMIT must be 0-50")
 	e.check(cfg.MessageRateLimit > 0 && cfg.MessageRateWindow > 0, "MESSAGE_RATE_LIMIT and MESSAGE_RATE_WINDOW must be positive")
+	e.check(cfg.KnockRateLimit > 0 && cfg.KnockRateWindow > 0, "KNOCK_RATE_LIMIT and KNOCK_RATE_WINDOW must be positive")
+	e.check(cfg.LetterDelay >= time.Minute && cfg.LetterDelay < cfg.Retention, "LETTER_DELAY must be at least 60 seconds and shorter than DATA_RETENTION")
 	e.check(cfg.Retention >= time.Hour, "DATA_RETENTION must be at least 3600 seconds")
 	e.check(cfg.JanitorInterval > 0, "JANITOR_INTERVAL must be positive")
 	e.check(cfg.ReportAutoHideThreshold > 0, "REPORT_AUTOHIDE_THRESHOLD must be positive")
+	e.check(cfg.GIFProvider == "" || cfg.GIFProvider == "giphy" || cfg.GIFProvider == "tenor", "GIF_PROVIDER must be giphy, tenor or empty")
 	e.check((cfg.AdminEmail == "") == (cfg.AdminPassword == ""), "set both ADMIN_EMAIL and ADMIN_PASSWORD, or neither")
+	e.check(cfg.PprofAddr == "" || isLoopback(cfg.PprofAddr), "PPROF_ADDR must be a loopback address such as localhost:6060")
 
 	return cfg, errors.Join(e.errs...)
+}
+
+func isLoopback(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 type env struct{ errs []error }

@@ -28,6 +28,7 @@ type Repository interface {
 	// UpdateCard changes the editable card fields; photoID must belong to
 	// the user and not be removed, or ErrPhotoNotYours.
 	UpdateCard(ctx context.Context, id uint64, tags []string, about, location string, photoID *uint64) error
+	UpdateSettings(ctx context.Context, id uint64, s Settings) error
 	Touch(ctx context.Context, id uint64) error
 	SetRole(ctx context.Context, id uint64, role Role) error
 	// SetBan sets or clears a ban; banning also revokes every token.
@@ -35,6 +36,12 @@ type Repository interface {
 	SetMute(ctx context.Context, id uint64, until *time.Time) error
 	// ListStaff returns every moderator and admin, admins first.
 	ListStaff(ctx context.Context) ([]User, error)
+	// RevokeGuestsNamed revokes the tokens of every guest called name
+	// except keep.
+	RevokeGuestsNamed(ctx context.Context, name string, keep uint64) error
+	// IsGuestNameClaimedSince reports whether a guest newer than id is
+	// called name.
+	IsGuestNameClaimedSince(ctx context.Context, name string, id uint64) (bool, error)
 }
 
 type MySQLRepository struct {
@@ -47,7 +54,7 @@ func NewRepository(db *sql.DB) *MySQLRepository {
 
 const selectUser = `
 	SELECT u.id, u.kind, u.role, u.name, u.gender, u.age, u.tags, u.about, u.location,
-	       u.country_code, u.photo_media_id, m.file_key, u.email, u.password_hash,
+	       u.aura, u.knocks_from, u.hide_gender, u.country_code, u.photo_media_id, m.file_key, u.email, u.password_hash,
 	       u.token_version, u.banned_until, u.muted_until, u.ip_hash, u.last_seen_at, u.created_at
 	FROM users u
 	LEFT JOIN media m ON m.id = u.photo_media_id AND m.removed_at IS NULL `
@@ -106,6 +113,13 @@ func (r *MySQLRepository) UpdateCard(ctx context.Context, id uint64, tags []stri
 	return nil
 }
 
+func (r *MySQLRepository) UpdateSettings(ctx context.Context, id uint64, s Settings) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE users SET aura = ?, knocks_from = ?, hide_gender = ? WHERE id = ?`,
+		nullString(s.Aura), s.KnocksFrom, s.HideGender, id)
+	return err
+}
+
 func (r *MySQLRepository) Touch(ctx context.Context, id uint64) error {
 	return r.exec(ctx, `UPDATE users SET last_seen_at = NOW() WHERE id = ?`, id)
 }
@@ -119,6 +133,27 @@ func (r *MySQLRepository) SetBan(ctx context.Context, id uint64, until *time.Tim
 		UPDATE users SET banned_until = ?,
 		       token_version = token_version + IF(? IS NULL, 0, 1)
 		WHERE id = ?`, until, until, id)
+}
+
+// RevokeGuestsNamed hands a guest name to whoever claims it after its owner
+// left: the old owner's token stops working, so two people never answer to
+// one name. The column collation compares names case-insensitively, the
+// same way people read them.
+func (r *MySQLRepository) RevokeGuestsNamed(ctx context.Context, name string, keep uint64) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE users SET token_version = token_version + 1
+		WHERE kind = 'guest' AND name = ? AND id <> ?`, name, keep)
+	return err
+}
+
+// IsGuestNameClaimedSince tells a returning guest why their session ended.
+// Ids only grow, so a newer guest with the name is the one who took it.
+func (r *MySQLRepository) IsGuestNameClaimedSince(ctx context.Context, name string, id uint64) (bool, error) {
+	var claimed bool
+	err := r.db.QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM users WHERE kind = 'guest' AND name = ? AND id > ?)`,
+		name, id).Scan(&claimed)
+	return claimed, err
 }
 
 func (r *MySQLRepository) SetMute(ctx context.Context, id uint64, until *time.Time) error {
@@ -167,12 +202,14 @@ func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	var (
 		u             User
 		country       sql.NullString
+		aura          sql.NullString
 		banned, muted sql.NullTime
 		tags          []byte
 	)
 	err := row.Scan(
 		&u.ID, &u.Kind, &u.Role, &u.Profile.Name, &u.Profile.Gender, &u.Profile.Age,
-		&tags, &u.Profile.About, &u.Profile.Location, &country, &u.PhotoID,
+		&tags, &u.Profile.About, &u.Profile.Location, &aura, &u.Settings.KnocksFrom,
+		&u.Settings.HideGender, &country, &u.PhotoID,
 		&u.PhotoKey, &u.Email, &u.PasswordHash, &u.TokenVersion, &banned, &muted,
 		&u.IPHash, &u.LastSeenAt, &u.CreatedAt,
 	)
@@ -180,6 +217,7 @@ func scanUser(row interface{ Scan(...any) error }) (User, error) {
 		err = json.Unmarshal(tags, &u.Profile.Tags)
 	}
 	u.Country = country.String
+	u.Settings.Aura = aura.String
 	u.BannedUntil = database.TimePtr(banned)
 	u.MutedUntil = database.TimePtr(muted)
 	return u, err

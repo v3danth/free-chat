@@ -1,0 +1,14 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      # Deferred cleanup of read-side resources: by the time these run the
+      # result has been read and its error checked, so a failure here has no
+      # caller that could act on it.
+      exclude-functions:
+        - (*database/sql.Rows).Close
+        - (*database/sql.Tx).Rollback
+        - (*database/sql.DB).Close
+        - (io.Closer).Close
+        - (net/http.ResponseWriter).Write

@@ -35,8 +35,7 @@ func (s *Storage) Root() string { return s.root }
 func (s *Storage) SaveAll(key string, files map[mediapath.Variant][]byte) error {
 	for v, data := range files {
 		if err := s.write(mediapath.File(v, key), data); err != nil {
-			s.DeleteAll(key)
-			return err
+			return errors.Join(err, s.DeleteAll(key))
 		}
 	}
 	return nil
