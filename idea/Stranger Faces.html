@@ -1,0 +1,768 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Stranger Faces</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: one night-sky column; the generator is the hero, then a wall of
+   faces, then the rules that make them. Single dark look, matching the app. */
+:root {
+  --bg: #0E0F13;
+  --panel: #15161B;
+  --card: #1B1C23;
+  --line: #262832;
+  --text: #F2EEE6;
+  --muted: #A3A1A8;
+  --amber: #FFB547;
+  --amber-ink: #1A1306;
+  --rare: #7FB2FF;
+  --epic: #C792FF;
+  --display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --body: 'Instrument Sans', system-ui, sans-serif;
+  --pixel: 'Pixelify Sans', ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: var(--body); font-size: 15px; line-height: 1.5; margin: 0; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 64px; display: flex; flex-direction: column; gap: 56px; }
+.brand { font-family: var(--display); font-weight: 700; font-size: 18px; display: flex; gap: 10px; align-items: baseline; }
+.brand b { color: var(--amber); }
+.brand span { font-family: var(--body); font-weight: 400; font-size: 14px; color: var(--muted); }
+h1, h2 { font-family: var(--display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(36px, 5vw, 56px); line-height: 1.04; }
+h1 em { font-style: normal; color: var(--amber); }
+h2 { font-size: 26px; }
+p { margin: 0; }
+.lede { color: #C9C5BD; font-size: 17px; max-width: 520px; }
+.label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* Hero */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 48px; align-items: center; }
+.hero-text { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.name-field { display: flex; flex-direction: column; gap: 8px; max-width: 460px; }
+.name-field input {
+  height: 56px; padding: 0 18px; border-radius: 14px; border: 1px solid var(--line); background: var(--card);
+  color: var(--text); font: inherit; font-size: 20px; width: 100%;
+}
+.name-field input:focus { border-color: var(--amber); outline: none; }
+.normal { font-size: 13px; color: var(--muted); min-height: 20px; }
+.normal code { font-family: var(--pixel); color: var(--text); font-size: 14px; }
+.specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; max-width: 560px; }
+.spec { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; min-width: 0; }
+.spec b { font-family: var(--pixel); font-weight: 500; font-size: 15px; overflow-wrap: anywhere; }
+
+.big-card { width: 320px; max-width: 100%; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+.frame { position: relative; width: 288px; max-width: 100%; aspect-ratio: 1; border-radius: 28px; padding: 6px; background: var(--line); }
+.frame canvas { width: 100%; height: 100%; display: block; border-radius: 22px; image-rendering: pixelated; animation: bob 2.4s steps(2, jump-none) infinite; }
+.frame[data-tier="rare"] { background: var(--rare); }
+.frame[data-tier="epic"] { background: var(--epic); }
+.frame[data-tier="legendary"] { background: conic-gradient(from 0deg, #FFB547, #FF7AC6, #7FB2FF, #7DF0C8, #FFB547); animation: spin 4s linear infinite; }
+.frame[data-tier="legendary"] canvas { animation: bob 2.4s steps(2, jump-none) infinite; }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes spin { to { filter: hue-rotate(360deg); } }
+.big-name { font-family: var(--display); font-size: 24px; font-weight: 700; text-align: center; overflow-wrap: anywhere; }
+.tier { font-family: var(--pixel); font-size: 14px; padding: 3px 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+.tier[data-tier="rare"] { color: var(--rare); border-color: var(--rare); }
+.tier[data-tier="epic"] { color: var(--epic); border-color: var(--epic); }
+.tier[data-tier="legendary"] { color: var(--amber-ink); background: var(--amber); border-color: var(--amber); }
+
+/* Wall */
+.section { display: flex; flex-direction: column; gap: 20px; }
+.section-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+.section-head p { color: var(--muted); max-width: 560px; }
+.btn { height: 44px; padding: 0 18px; border-radius: 12px; border: 1px solid var(--amber); background: transparent; color: var(--amber); font: inherit; font-weight: 600; cursor: pointer; }
+.btn:hover { background: #2A2416; }
+.wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; align-items: center; cursor: pointer; color: inherit; font: inherit; min-width: 0; }
+.tile:hover { border-color: #3A3C48; }
+.tile img { width: 100%; max-width: 100px; aspect-ratio: 1; image-rendering: pixelated; border-radius: 10px; }
+.tile span { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile[data-tier="rare"] { border-color: #34496B; }
+.tile[data-tier="epic"] { border-color: #4E3A6E; }
+.tile[data-tier="legendary"] { border-color: var(--amber); }
+
+/* Rarity */
+.tiers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tier-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.tier-card img { width: 96px; aspect-ratio: 1; image-rendering: pixelated; border-radius: 12px; }
+.tier-card .odds { font-family: var(--pixel); font-size: 28px; font-variant-numeric: tabular-nums; }
+.tier-card p { color: var(--muted); font-size: 14px; }
+
+/* Rules table */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 14px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; background: var(--panel); }
+tr:last-child td { border-bottom: none; }
+td.num { font-family: var(--pixel); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td img { width: 40px; image-rendering: pixelated; border-radius: 6px; display: block; }
+
+.steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; padding: 0; margin: 0; list-style: none; counter-reset: s; }
+.steps li { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px; counter-increment: s; min-width: 0; }
+.steps li::before { content: counter(s); font-family: var(--pixel); color: var(--amber); font-size: 20px; }
+.steps b { font-size: 15px; }
+.steps span { color: var(--muted); font-size: 14px; }
+
+@media (max-width: 860px) {
+  .hero { grid-template-columns: 1fr; gap: 28px; }
+  .big-card { order: -1; margin: 0 auto; }
+  .tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .steps { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <div class="brand">FreeOnlineChat<b>India</b><span>Stranger Faces, prototype</span></div>
+
+  <section class="hero">
+    <div class="hero-text">
+      <h1>Your name is <em>your face.</em></h1>
+      <p class="lede">Type any name. The same name always draws the same pixel animal, on every phone and laptop, with nothing stored on the server.</p>
+      <label class="name-field" for="name">
+        <span class="label">Name</span>
+        <input id="name" maxlength="32" autocomplete="off" spellcheck="false" value="night_owl">
+      </label>
+      <p class="normal" id="normal"></p>
+      <div class="specs" id="specs"></div>
+    </div>
+    <div class="big-card">
+      <div class="frame" id="frame"><canvas id="big" width="24" height="24" aria-label="Generated face"></canvas></div>
+      <div class="big-name" id="big-name"></div>
+      <span class="tier" id="big-tier"></span>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>The room tonight</h2>
+        <p>Every face below is drawn from its name alone. Tap one to inspect it.</p>
+      </div>
+      <button class="btn" id="shuffle" type="button">New names</button>
+    </div>
+    <div class="wall" id="wall"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>Rarity</h2>
+        <p>Rarity comes from the name too, so a legendary name is legendary for everyone who types it.</p>
+      </div>
+    </div>
+    <div class="tiers" id="tiers"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>The rules each animal follows</h2>
+        <p>Every feature is picked inside the range its species allows, so a frog never gets cat ears and a bunny never wears a cap over its ears.</p>
+      </div>
+    </div>
+    <div class="table-wrap"><table id="rules"></table></div>
+  </section>
+
+  <section class="section">
+    <h2>How a name becomes a face</h2>
+    <ol class="steps">
+      <li><b>Normalize</b><span>Trim, lowercase, fold look-alike characters. "Night_Owl " and "night_owl" match.</span></li>
+      <li><b>Hash</b><span>A 53-bit hash of the name seeds a random number generator.</span></li>
+      <li><b>Draw 24 numbers</b><span>Always in the same order. Each trait owns one slot, so new traits never change old faces.</span></li>
+      <li><b>Pick inside the rules</b><span>Species first, then every feature within that species' ranges.</span></li>
+      <li><b>Paint 24 x 24</b><span>Layers, outline, cached as a tiny image. About 200 bytes per face.</span></li>
+    </ol>
+  </section>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Seeding: name -> 24 numbers in [0, 1). Pure and deterministic.
+// ---------------------------------------------------------------------------
+const SIZE = 24;
+const INK = '#1A1520';
+const SLOTS = 24;
+
+function normalize(name) {
+  return name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function cyrb53(str) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+
+function mulberry32(a) {
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Slot order is the format. Append new slots at the end; never reorder.
+const S = { tier: 0, species: 1, palette: 2, headW: 3, headH: 4, round: 5, ear: 6, eyeShape: 7, eyeSize: 8, eyeGap: 9, eyeY: 10,
+  muzzleW: 11, muzzleH: 12, mouth: 13, blush: 14, marks: 15, acc: 16, accColor: 17, bg: 18, bg2: 19, spots: 20, blinkless: 21 };
+
+function slotsFor(name) {
+  const h = cyrb53(normalize(name) || 'stranger');
+  const rng = mulberry32(h % 4294967296);
+  return { seed: h, d: Array.from({ length: SLOTS }, rng) };
+}
+const pick = (v, arr) => arr[Math.min(arr.length - 1, Math.floor(v * arr.length))];
+const int = (v, [lo, hi]) => lo + Math.min(hi - lo, Math.floor(v * (hi - lo + 1)));
+const span = (v, [lo, hi]) => lo + v * (hi - lo);
+function weighted(v, pairs) {
+  const total = pairs.reduce((s, [, w]) => s + w, 0);
+  let x = v * total;
+  for (const [item, w] of pairs) { if ((x -= w) < 0) return item; }
+  return pairs[pairs.length - 1][0];
+}
+
+// ---------------------------------------------------------------------------
+// The rules: one entry per species. Every range is inclusive.
+// ---------------------------------------------------------------------------
+const P = (name, fur, shade, light, extra = {}) => ({ name, fur, shade, light, inner: extra.inner || shade, nose: extra.nose || '#2A2025', ear: extra.ear || shade, patch: extra.patch || INK, iris: extra.iris || '#9BD45A' });
+
+const SPECIES = {
+  cat: { label: 'Cat', tier: 'common', weight: 3,
+    head: { w: [15, 19], h: [13, 16], round: [2, 2.5] }, ears: { type: 'pointy', size: [4, 6] },
+    eyes: { shapes: ['round', 'slit', 'happy', 'sleepy', 'sparkle', 'dot', 'side'], size: [1, 3], gap: [2, 4], y: [-2, 0] },
+    muzzle: null, nose: 'tri', mouths: ['w', 'w', 'smile', 'tongue', 'fang', 'o'], blush: 0.5, marks: [['none', 3], ['stripes', 2]],
+    palettes: [P('Ginger', '#F0A35E', '#C97A3D', '#FBE3C4', { inner: '#F7B7B0', nose: '#E07A8A', iris: '#9BD45A' }),
+      P('Grey', '#9AA0AE', '#727889', '#E3E5EA', { inner: '#F2B4BE', nose: '#E58B9B', iris: '#F2C94C' }),
+      P('Midnight', '#423E4C', '#2E2B36', '#5C5868', { inner: '#C98A97', nose: '#D87C8E', iris: '#F2D04C' }),
+      P('Snow', '#F4EFE6', '#D5CEC2', '#FFFFFF', { inner: '#F6B9C2', nose: '#EE8FA0', iris: '#7EC8E3' })],
+    shiny: P('Shiny lilac', '#B9A6FF', '#8E79E0', '#EDE6FF', { inner: '#FFC1E3', nose: '#FF8FC8', iris: '#7DF9FF' }) },
+  dog: { label: 'Dog', tier: 'common', weight: 3,
+    head: { w: [15, 18], h: [13, 16], round: [2, 2.4] }, ears: { type: 'floppy', size: [4, 6] },
+    eyes: { shapes: ['round', 'dot', 'happy', 'sparkle', 'tall', 'sleepy'], size: [1, 3], gap: [2, 4], y: [-2, -1] },
+    muzzle: { w: [6, 8], h: [3, 4] }, nose: 'dot', mouths: ['smile', 'tongue', 'tongue', 'open', 'line'], blush: 0.25, marks: [['none', 3], ['eyepatch', 1]],
+    palettes: [P('Golden', '#E2B86F', '#B88E4E', '#F8E7C5', { ear: '#B07F42' }),
+      P('Cocoa', '#9A6440', '#744A2E', '#D9B48E', { ear: '#5E3A22' }),
+      P('Shiba', '#E39A4C', '#B87635', '#FBEEDC', { ear: '#B87635' }),
+      P('Cream', '#F2EDE4', '#CFC7BA', '#FFFFFF', { ear: '#8C7B6A' })],
+    shiny: P('Shiny mint', '#7FE0C4', '#4FB89C', '#D8FFF3', { ear: '#3E9C82' }) },
+  bunny: { label: 'Bunny', tier: 'common', weight: 3,
+    head: { w: [14, 17], h: [12, 14], round: [2, 2.2] }, ears: { type: 'long', size: [5, 8] },
+    eyes: { shapes: ['round', 'dot', 'happy', 'sparkle', 'sleepy', 'big'], size: [1, 3], gap: [2, 4], y: [-1, 0] },
+    muzzle: null, nose: 'tri', mouths: ['w', 'w', 'o', 'smile'], blush: 0.7, marks: [['none', 1]],
+    palettes: [P('Cotton', '#F6F2EC', '#D9D2C8', '#FFFFFF', { inner: '#F7B6C4', nose: '#EE8FA0' }),
+      P('Mocha', '#B08A6E', '#8C6A52', '#E8D6C6', { inner: '#F2B4BE', nose: '#E07A8A' }),
+      P('Ash', '#A9A6B2', '#86838F', '#E6E4EA', { inner: '#F2B4BE', nose: '#E58B9B' })],
+    shiny: P('Shiny bubblegum', '#FFB3D9', '#F08CC0', '#FFE3F2', { inner: '#FFFFFF', nose: '#E0559A' }),
+    noAcc: ['cap', 'beanie', 'headphones'] },
+  bear: { label: 'Bear', tier: 'common', weight: 3,
+    head: { w: [16, 20], h: [13, 16], round: [2, 2.3] }, ears: { type: 'round', size: [2, 3] },
+    eyes: { shapes: ['dot', 'round', 'happy', 'sleepy', 'sparkle'], size: [1, 2], gap: [2, 4], y: [-2, -1] },
+    muzzle: { w: [6, 7], h: [3, 4] }, nose: 'dot', mouths: ['smile', 'line', 'w', 'open'], blush: 0.4, marks: [['none', 1]],
+    palettes: [P('Brown', '#9C6B45', '#7A5134', '#D8B28E', { inner: '#D8B28E' }),
+      P('Honey', '#D9A15B', '#B07B3C', '#F4D9AE', { inner: '#F4D9AE' }),
+      P('Black', '#3E3A44', '#2C2932', '#9C8C7E', { inner: '#7A6E66', nose: '#16131A' })],
+    shiny: P('Shiny sky', '#7FD4FF', '#4FAEE0', '#E2F6FF', { inner: '#E2F6FF' }) },
+  frog: { label: 'Frog', tier: 'common', weight: 3,
+    head: { w: [17, 20], h: [11, 13], round: [2.2, 2.6] }, ears: { type: 'bumps', size: [0, 0] },
+    eyes: { shapes: ['round', 'side', 'sleepy', 'happy', 'big'], size: [1, 2], gap: [2, 3], y: [0, 0] },
+    muzzle: null, nose: 'none', mouths: ['wide', 'wide', 'smile', 'tongue'], blush: 0.6, marks: [['none', 2], ['spots', 1]],
+    palettes: [P('Leaf', '#7DCB6B', '#57A04B', '#D8F2B7'), P('Pond', '#5FBFA4', '#3F9A80', '#CFF2E6'), P('Lime', '#B5DB5A', '#8DB43C', '#EEF8C8')],
+    shiny: P('Shiny pink', '#FF9FCB', '#E676AA', '#FFE0EE'),
+    noAcc: ['headphones', 'beanie'] },
+  mouse: { label: 'Mouse', tier: 'common', weight: 3,
+    head: { w: [13, 16], h: [12, 14], round: [2, 2.2] }, ears: { type: 'round', size: [3, 4] },
+    eyes: { shapes: ['dot', 'round', 'big', 'sparkle'], size: [1, 2], gap: [2, 3], y: [-1, 0] },
+    muzzle: { w: [4, 5], h: [2, 3] }, nose: 'tri', mouths: ['w', 'o', 'smile'], blush: 0.6, marks: [['none', 1]],
+    palettes: [P('Field', '#B49A86', '#8F7765', '#EFE3D8', { inner: '#F4AFC0', nose: '#E58B9B' }),
+      P('Silver', '#B4B4BE', '#8E8E9A', '#ECECF1', { inner: '#F4AFC0', nose: '#E58B9B' })],
+    shiny: P('Shiny butter', '#FFE36E', '#E8C344', '#FFF6C9', { inner: '#FF9EBB', nose: '#E0559A' }) },
+  fox: { label: 'Fox', tier: 'rare', weight: 2,
+    head: { w: [15, 18], h: [12, 15], round: [2, 2.4] }, ears: { type: 'pointy', size: [5, 7] },
+    eyes: { shapes: ['slit', 'happy', 'sleepy', 'side', 'sparkle'], size: [1, 2], gap: [2, 4], y: [-2, -1] },
+    muzzle: null, nose: 'dot', mouths: ['w', 'smile', 'fang'], blush: 0.3, marks: [['cheeks', 1]],
+    palettes: [P('Red fox', '#E8783A', '#B9572A', '#FFF4E8', { inner: '#3A2A2A', iris: '#F2B33D' }),
+      P('Arctic', '#E9EEF2', '#C3CCD6', '#FFFFFF', { inner: '#9AA5B5', iris: '#6FB7E9' })],
+    shiny: P('Shiny ocean', '#5FA8FF', '#3D7FD6', '#E6F2FF', { inner: '#1E3A66', iris: '#FFE36E' }) },
+  panda: { label: 'Panda', tier: 'rare', weight: 2,
+    head: { w: [16, 19], h: [13, 15], round: [2, 2.3] }, ears: { type: 'round', size: [2, 3] },
+    eyes: { shapes: ['dot', 'round', 'sparkle', 'sleepy'], size: [1, 2], gap: [2, 3], y: [-1, 0] },
+    muzzle: { w: [5, 6], h: [3, 3] }, nose: 'dot', mouths: ['smile', 'w', 'line'], blush: 0.5, marks: [['patches', 1]],
+    palettes: [P('Classic', '#F7F4EF', '#D9D3CA', '#FFFFFF', { patch: '#2C2933', ear: '#2C2933', inner: '#2C2933', nose: '#2C2933' })],
+    shiny: P('Shiny berry', '#FFF1D6', '#E6D3B0', '#FFFFFF', { patch: '#D9467A', ear: '#D9467A', inner: '#D9467A', nose: '#8E1F48' }) },
+  raccoon: { label: 'Raccoon', tier: 'rare', weight: 2,
+    head: { w: [16, 19], h: [12, 15], round: [2, 2.4] }, ears: { type: 'pointy', size: [3, 4] },
+    eyes: { shapes: ['dot', 'round', 'side', 'sparkle'], size: [1, 2], gap: [2, 4], y: [-2, -1] },
+    muzzle: { w: [5, 6], h: [3, 3] }, nose: 'dot', mouths: ['fang', 'smile', 'w'], blush: 0.2, marks: [['mask', 1]],
+    palettes: [P('Trash panda', '#A3A2AA', '#7C7B85', '#E8E6EA', { patch: '#3A3842', inner: '#3A3842' })],
+    shiny: P('Shiny dusk', '#C9B8FF', '#9D89E0', '#F0EBFF', { patch: '#4A2E7A', inner: '#4A2E7A' }) },
+  hamster: { label: 'Hamster', tier: 'rare', weight: 2,
+    head: { w: [16, 20], h: [13, 16], round: [2, 2.2] }, ears: { type: 'round', size: [2, 2] },
+    eyes: { shapes: ['big', 'dot', 'sparkle', 'happy'], size: [1, 2], gap: [2, 4], y: [-2, -1] },
+    muzzle: null, nose: 'tri', mouths: ['w', 'o', 'smile'], blush: 0.8, marks: [['puffs', 1]],
+    palettes: [P('Syrian', '#E9B07A', '#C48A55', '#FFF5EA', { inner: '#F4A9A8', nose: '#E08A96' }),
+      P('Dove', '#C8C2BC', '#A39C96', '#FBF8F5', { inner: '#F4A9A8', nose: '#E08A96' })],
+    shiny: P('Shiny gold', '#FFD84A', '#E0B322', '#FFF6CC', { inner: '#FF9EBB', nose: '#E0559A' }) },
+  owl: { label: 'Owl', tier: 'rare', weight: 2,
+    head: { w: [15, 18], h: [13, 16], round: [2.2, 2.6] }, ears: { type: 'tufts', size: [3, 4] },
+    eyes: { shapes: ['round', 'big', 'sleepy', 'side'], size: [2, 3], gap: [1, 2], y: [-1, 0] },
+    muzzle: null, nose: 'beak', mouths: ['none'], blush: 0.2, marks: [['discs', 1]],
+    palettes: [P('Barn', '#B08A62', '#8A6847', '#F1E4D0', { nose: '#F2A93B' }), P('Snowy', '#EEEAE2', '#C9C2B6', '#FFFFFF', { nose: '#3A3530' })],
+    shiny: P('Shiny ember', '#FF8A5B', '#D9643A', '#FFE2D2', { nose: '#5A2A14' }) },
+  pig: { label: 'Pig', tier: 'rare', weight: 2,
+    head: { w: [16, 19], h: [13, 15], round: [2, 2.3] }, ears: { type: 'pig', size: [3, 4] },
+    eyes: { shapes: ['dot', 'happy', 'sleepy', 'round'], size: [1, 2], gap: [3, 4], y: [-2, -1] },
+    muzzle: null, nose: 'snout', mouths: ['smile', 'line', 'open'], blush: 0.7, marks: [['none', 1]],
+    palettes: [P('Pink', '#F6B6B8', '#E08D93', '#FFD5D7', { nose: '#F08A95' })],
+    shiny: P('Shiny matcha', '#B8F0C0', '#86D093', '#E4FFE8', { nose: '#5DB06D' }) },
+  capybara: { label: 'Capybara', tier: 'epic', weight: 1,
+    head: { w: [16, 19], h: [13, 16], round: [2.6, 3.2] }, ears: { type: 'round', size: [1, 2] },
+    eyes: { shapes: ['sleepy', 'sleepy', 'dot', 'happy'], size: [1, 2], gap: [3, 5], y: [-3, -2] },
+    muzzle: { w: [9, 12], h: [4, 5] }, nose: 'wide', mouths: ['line', 'smile'], blush: 0.3, marks: [['none', 1]],
+    palettes: [P('Wild', '#A97C55', '#83603F', '#C49A72', { inner: '#6E4F34', nose: '#3B2A20' }), P('Dusk', '#8C6A4E', '#6C5039', '#A98564', { inner: '#5A4130', nose: '#2E2018' })],
+    shiny: P('Shiny gold', '#F4C542', '#CC9E1F', '#FFE08A', { inner: '#A87A10', nose: '#5A3E06' }),
+    accBias: [['orange', 30]] },
+  axolotl: { label: 'Axolotl', tier: 'epic', weight: 1,
+    head: { w: [16, 19], h: [12, 14], round: [2.2, 2.6] }, ears: { type: 'gills', size: [3, 4] },
+    eyes: { shapes: ['dot', 'big', 'happy', 'sparkle'], size: [1, 2], gap: [3, 5], y: [-1, 0] },
+    muzzle: null, nose: 'none', mouths: ['wide', 'smile', 'w'], blush: 0.9, marks: [['none', 2], ['spots', 1]],
+    palettes: [P('Pink', '#F7B5CD', '#E38CAE', '#FFDDEA', { inner: '#E2507F' }), P('Leucistic', '#F5EFF2', '#D9CED4', '#FFFFFF', { inner: '#F0709A' }), P('Wild', '#7A7F8C', '#5E6270', '#A9AEBB', { inner: '#C77DA0' })],
+    shiny: P('Shiny cosmic', '#9AD8FF', '#6FB3E6', '#E2F5FF', { inner: '#5A6BFF' }),
+    noAcc: ['headphones'] },
+};
+
+const EYE_LIMITS = { dot: [1, 3], round: [1, 3], tall: [1, 2], sleepy: [1, 3], happy: [1, 3], sparkle: [2, 3], slit: [2, 3], big: [1, 2], side: [1, 2] };
+const BACKGROUNDS = [['Blush', '#FFD6E0'], ['Sky', '#CDEBFF'], ['Mint', '#D4F2CC'], ['Butter', '#FFF1C2'], ['Lilac', '#E6DBFF'], ['Peach', '#FFDCC2'], ['Seafoam', '#C9F2EC'], ['Cloud', '#ECECF0']];
+const ACC_COLORS = ['#E5484D', '#3E7BFA', '#2BB673', '#F5A524', '#8E4EC6', '#F06BA8'];
+const ACCESSORIES = [['none', 40], ['cap', 8], ['beanie', 8], ['headphones', 7], ['flower', 8], ['bow', 6], ['bandaid', 6], ['shades', 5]];
+const TIERS = [['legendary', 0.02], ['epic', 0.08], ['rare', 0.25], ['common', 1]];
+
+// traitsFor is the whole generator's decision step: pure, no drawing.
+function traitsFor(name) {
+  const { seed, d } = slotsFor(name);
+  const tier = TIERS.find(([, p]) => d[S.tier] < p)[0];
+  const key = weighted(d[S.species], Object.entries(SPECIES).map(([k, sp]) => [k, sp.weight]));
+  const sp = SPECIES[key];
+  const pal = tier === 'legendary' ? sp.shiny : pick(d[S.palette], sp.palettes);
+  const w = int(d[S.headW], sp.head.w);
+  const h = int(d[S.headH], sp.head.h);
+  const round = +span(d[S.round], sp.head.round).toFixed(2);
+  const earSize = int(d[S.ear], sp.ears.size);
+
+  let eyeShape = pick(d[S.eyeShape], sp.eyes.shapes);
+  if (tier === 'epic' && sp.eyes.shapes.includes('sparkle')) eyeShape = 'sparkle';
+  const [lo, hi] = EYE_LIMITS[eyeShape];
+  const eyeSize = int(d[S.eyeSize], [Math.max(lo, sp.eyes.size[0]), Math.max(Math.max(lo, sp.eyes.size[0]), Math.min(hi, sp.eyes.size[1]))]);
+  const eyeGap = int(d[S.eyeGap], sp.eyes.gap);
+  const eyeY = int(d[S.eyeY], sp.eyes.y);
+
+  const muzzle = sp.muzzle && { w: int(d[S.muzzleW], sp.muzzle.w), h: int(d[S.muzzleH], sp.muzzle.h) };
+  const mouth = pick(d[S.mouth], sp.mouths);
+  const blush = d[S.blush] < sp.blush;
+  const marks = weighted(d[S.marks], sp.marks);
+
+  let accTable = ACCESSORIES.filter(([a]) => !(sp.noAcc || []).includes(a)).concat(sp.accBias || []);
+  if (key === 'frog') accTable = accTable.concat([['leaf', 10]]);
+  let acc = weighted(d[S.acc], accTable);
+  if (tier === 'epic' || tier === 'legendary') acc = d[S.accColor] < 0.5 ? 'crown' : 'halo';
+  const accColor = pick(d[S.accColor], ACC_COLORS);
+
+  const bg = pick(d[S.bg], BACKGROUNDS);
+  const bg2 = pick(d[S.bg2], BACKGROUNDS.filter((b) => b !== bg));
+  return { name: normalize(name), seed, tier, species: key, sp, pal, w, h, round, earSize, eyeShape, eyeSize, eyeGap, eyeY, muzzle, mouth, blush, marks, acc, accColor, bg, bg2, spots: d[S.spots] };
+}
+
+// ---------------------------------------------------------------------------
+// Painting: traits -> 24 x 24 colour grid.
+// ---------------------------------------------------------------------------
+const ell = (cx, cy, rx, ry, p = 2) => (x, y) => Math.abs((x - cx) / rx) ** p + Math.abs((y - cy) / ry) ** p <= 1;
+const tri = (ax, ay, by, bw, tilt) => (x, y) => {
+  if (y < ay || y > by) return false;
+  const t = (y - ay) / (by - ay);
+  return Math.abs(x - (ax + t * tilt)) <= t * bw + 0.35;
+};
+const mirror = (f) => (x, y) => f(x, y) || f(SIZE - x, y);
+
+function paint(buf, test, color) {
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) if (test(x + 0.5, y + 0.5)) buf[y * SIZE + x] = color;
+}
+function set(buf, x, y, color) {
+  if (x >= 0 && x < SIZE && y >= 0 && y < SIZE) buf[y * SIZE + x] = color;
+}
+const setSym = (buf, x, y, color) => { set(buf, x, y, color); set(buf, SIZE - 1 - x, y, color); };
+const get = (buf, x, y) => (x >= 0 && x < SIZE && y >= 0 && y < SIZE ? buf[y * SIZE + x] : null);
+
+// eyeMask lists pixels of one eye as [out, down, colour]: "out" counts away
+// from the face centre, so the right eye is the exact mirror of the left.
+function eyeMask(shape, s, pal) {
+  const px = [];
+  const box = (w, h, c, cut) => { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (!(cut && (x === 0 || x === w - 1) && (y === 0 || y === h - 1))) px.push([x, y, c]); };
+  const W = '#FFFFFF';
+  switch (shape) {
+    case 'dot': box(s, s, INK); if (s >= 2) px.push([s - 1, 0, W]); return { px, w: s, h: s };
+    case 'round': { const w = s + 1; box(w, w, INK, w >= 4); px.push(w >= 3 ? [w - 2, 1, W] : [w - 1, 0, W]); return { px, w, h: w }; }
+    case 'tall': box(s, s + 1, INK); if (s >= 2) px.push([s - 1, 0, W]); return { px, w: s, h: s + 1 };
+    case 'sleepy': { const w = s + 1, row = Math.floor(s / 2); for (let x = 0; x < w; x++) px.push([x, row, INK]); if (w >= 3) px.push([w - 1, row + 1, INK]); return { px, w, h: row + 2 }; }
+    case 'happy': { const w = Math.max(3, s + 1); for (let x = 1; x < w - 1; x++) px.push([x, 0, INK]); px.push([0, 1, INK], [w - 1, 1, INK]); return { px, w, h: 2 }; }
+    case 'sparkle': { const w = s + 1; box(w, w, INK, w >= 4); px.push([w - 2, 1, W], [1, w - 2, W]); if (w >= 4) px.push([w - 3, 1, W]); return { px, w, h: w }; }
+    case 'slit': { const w = s + 1; box(w, w, pal.iris, w >= 4); for (let y = 0; y < w; y++) px.push([1, y, INK]); return { px, w, h: w }; }
+    case 'big': { const w = s + 2; box(w, w, INK, true); px.push([w - 2, 1, W]); if (w >= 4) px.push([w - 3, 1, W], [1, w - 2, W]); return { px, w, h: w }; }
+    case 'side': { const w = s + 2, h = s + 1; box(w, h, W); return { px, w, h, side: s }; }
+  }
+  return { px, w: 1, h: 1 };
+}
+
+function render(t, { blink = false } = {}) {
+  const buf = new Array(SIZE * SIZE).fill(null);
+  const { sp, pal } = t;
+  const rx = t.w / 2, ry = t.h / 2;
+  const cy = SIZE - 2 - ry;
+  const headTop = cy - ry;
+  const headBottom = Math.floor(cy + ry) - 1;
+  const head = ell(12, cy, rx, ry, t.round);
+
+  // Eye geometry first: frogs grow their eyes on bumps, owls ring them.
+  const shape = blink && !['sleepy', 'happy', 'side'].includes(t.eyeShape) ? 'sleepy' : t.eyeShape;
+  const eye = eyeMask(shape, t.eyeSize, pal);
+  const maxGap = Math.floor(rx - eye.w - 1);
+  const gap = Math.max(1, Math.min(t.eyeGap, maxGap));
+  const innerL = 12 - gap - 1, innerR = 12 + gap;
+  let ey = Math.round(cy + t.eyeY - eye.h / 2);
+  if (sp.ears.type === 'bumps') ey = Math.round(headTop + 1.2 - eye.h / 2);
+  const eyeCx = innerL + 0.5 - (eye.w - 1) / 2;
+  const eyeCy = ey + eye.h / 2;
+
+  // 1. Ears behind the head.
+  const e = t.earSize;
+  switch (sp.ears.type) {
+    case 'pointy': {
+      const ax = 12 - rx * 0.6 - 0.5, ay = Math.max(0.5, headTop - e + 1), by = headTop + 3, bw = e * 0.45 + 1;
+      paint(buf, mirror(tri(ax, ay, by, bw, 1)), pal.fur);
+      if (bw > 2) paint(buf, mirror(tri(ax + 0.2, ay + 1.8, by, bw - 1.3, 1)), pal.inner);
+      break;
+    }
+    case 'round':
+      paint(buf, mirror(ell(12 - rx * 0.7, headTop + 1.2, e + 0.3, e + 0.3)), pal.ear === pal.shade ? pal.fur : pal.ear);
+      if (e >= 2) paint(buf, mirror(ell(12 - rx * 0.7, headTop + 1.4, e - 0.8, e - 0.8)), pal.inner);
+      break;
+    case 'long': {
+      const cx = 12 - 2.6;
+      paint(buf, mirror(ell(cx, headTop - e / 2 + 1.5, 1.9, e / 2 + 1.6)), pal.fur);
+      paint(buf, mirror(ell(cx, headTop - e / 2 + 1.8, 0.75, e / 2)), pal.inner);
+      break;
+    }
+    case 'tufts':
+      paint(buf, mirror(tri(12 - rx * 0.7 - 1, Math.max(0.5, headTop - e + 1.5), headTop + 2, e * 0.4 + 0.7, 1.6)), pal.shade);
+      break;
+    case 'pig':
+      paint(buf, mirror(tri(12 - rx * 0.55 - 1, Math.max(0.5, headTop - e + 1.5), headTop + 2.5, e * 0.5 + 0.8, 1.2)), pal.fur);
+      paint(buf, mirror(tri(12 - rx * 0.55 - 0.8, Math.max(0.5, headTop - e + 3), headTop + 2.5, e * 0.5 - 0.4, 1.2)), pal.shade);
+      break;
+    case 'gills':
+      for (let k = 0; k < 3; k++) {
+        const bx = Math.round(12 - rx) + 1, by = Math.round(cy - 2.5 + k * 1.8), dy = [-0.7, -0.15, 0.45][k];
+        for (let i = 1; i <= e + (k === 1 ? 1 : 0); i++) setSym(buf, bx - i, Math.round(by + i * dy), pal.inner);
+      }
+      break;
+  }
+
+  // 2. Head, with a darker rim along the bottom.
+  paint(buf, head, pal.fur);
+  paint(buf, (x, y) => head(x, y) && !head(x, y + 1.4), pal.shade);
+  if (sp.ears.type === 'bumps') {
+    paint(buf, mirror(ell(eyeCx, headTop + 1.2, eye.w / 2 + 1.4, eye.h / 2 + 1.3)), pal.fur);
+  }
+
+  // 3. Floppy ears hang over the sides.
+  if (sp.ears.type === 'floppy') paint(buf, mirror(ell(12 - rx + 0.8, cy - ry * 0.35 + e / 2 - 1, 2.1, e / 2 + 0.7)), pal.ear);
+
+  // 4. Markings.
+  const inHead = (x, y) => head(x + 0.5, y + 0.5);
+  switch (t.marks) {
+    case 'cheeks': paint(buf, (x, y) => head(x, y) && y > cy + 0.5 && Math.abs(x - 12) > (headBottom - y) * 0.6 - 1.2, pal.light); break;
+    case 'stripes': for (const [x, len] of [[11, 2], [12, 2], [9, 1], [14, 1]]) for (let i = 0; i < len; i++) if (inHead(x, Math.ceil(headTop) + 1 + i)) set(buf, x, Math.ceil(headTop) + 1 + i, pal.shade); break;
+    case 'eyepatch': paint(buf, ell(eyeCx, eyeCy, eye.w / 2 + 1.4, eye.h / 2 + 1.4), pal.ear); break;
+    case 'patches': paint(buf, mirror(ell(eyeCx - 0.4, eyeCy + 0.6, eye.w / 2 + 1.2, eye.h / 2 + 1.5)), pal.patch); break;
+    case 'mask': paint(buf, (x, y) => head(x, y) && Math.abs(y - eyeCy) < eye.h / 2 + 1.1 && Math.abs(x - 12) > 0.6, pal.patch); break;
+    case 'discs': paint(buf, mirror(ell(eyeCx, eyeCy, eye.w / 2 + 1.5, eye.h / 2 + 1.5)), pal.light); break;
+    case 'puffs': paint(buf, mirror(ell(12 - rx + 2.6, cy + ry * 0.35, 2.8, 2.4)), pal.light); break;
+    case 'spots': {
+      const r = mulberry32(Math.floor(t.spots * 1e9));
+      for (let i = 0; i < 5; i++) {
+        const x = Math.floor(12 - rx + 1 + r() * (t.w - 2)), y = Math.floor(headTop + 1 + r() * (ey - headTop - 1));
+        if (inHead(x, y) && Math.abs(y - eyeCy) > eye.h / 2 + 0.5) set(buf, x, y, pal.shade);
+      }
+      break;
+    }
+  }
+
+  // 5. Nose and muzzle positions.
+  let ny = Math.min(ey + eye.h + 1, headBottom - 3);
+  if (t.muzzle) paint(buf, ell(12, ny + t.muzzle.h / 2 - 0.3, t.muzzle.w / 2, t.muzzle.h / 2), pal.light);
+
+  // 6. Eyes (or shades over them).
+  if (t.acc !== 'shades') {
+    for (const [out, down, c] of eye.px) {
+      set(buf, innerL - out, ey + down, c);
+      set(buf, innerR + out, ey + down, c);
+    }
+    if (eye.side) { // both pupils look the same way: to the viewer's right
+      for (let y = 0; y < eye.h; y++) for (let i = 0; i < eye.side; i++) {
+        set(buf, innerL - i, ey + y, INK);
+        set(buf, innerR + eye.w - 1 - i, ey + y, INK);
+      }
+    }
+  }
+
+  // 7. Blush under the eyes.
+  if (t.blush) {
+    const by = ey + eye.h + (t.eyeShape === 'happy' || t.eyeShape === 'sleepy' ? 1 : 0);
+    for (const dx of [0, 1]) if (inHead(innerL - eye.w + 1 - dx, by)) setSym(buf, innerL - eye.w + 1 - dx, by, '#FF8FA3');
+  }
+
+  // 8. Nose.
+  switch (sp.nose) {
+    case 'tri': setSym(buf, 11, ny, pal.nose); setSym(buf, 11, ny + 1, pal.nose); break;
+    case 'dot': setSym(buf, 11, ny, pal.nose); setSym(buf, 10, ny, pal.nose); setSym(buf, 11, ny + 1, pal.nose); break;
+    case 'wide': setSym(buf, 9, ny + 1, pal.nose); setSym(buf, 10, ny + 1, pal.nose); break;
+    case 'beak': setSym(buf, 11, ny - 1, pal.nose); setSym(buf, 11, ny, pal.nose); break;
+    case 'snout':
+      paint(buf, ell(12, ny + 1, 3.1, 1.9), pal.nose);
+      setSym(buf, 10, ny + 1, pal.shade);
+      break;
+  }
+
+  // 9. Mouth.
+  const my = Math.min(sp.nose === 'none' ? ny : ny + 2, headBottom - 1);
+  const row = (xs, y, c = INK) => xs.forEach((x) => set(buf, x, y, c));
+  switch (t.mouth) {
+    case 'w': row([9, 14], my); row([10, 13], my + 1); row([11, 12], my); break;
+    case 'smile': row([10, 13], my); row([11, 12], my + 1); break;
+    case 'line': row([10, 11, 12, 13], my); break;
+    case 'o': row([11, 12], my); row([11, 12], my + 1); break;
+    case 'open': row([10, 11, 12, 13], my); row([10, 13], my + 1); row([11, 12], my + 1, '#D9445E'); row([11, 12], my + 2); break;
+    case 'tongue': row([10, 13], my); row([11, 12], my + 1); row([12], my + 2, '#FF7A9A'); row([13], my + 1, '#FF7A9A'); break;
+    case 'fang': row([10, 13], my); row([11, 12], my + 1); row([10], my + 1, '#FFFFFF'); break;
+    case 'wide': row([8, 15], my); row([9, 10, 11, 12, 13, 14], my + 1); break;
+  }
+
+  // 10. Accessory.
+  const top = Math.ceil(headTop);
+  const c = t.accColor, dark = '#2B2B36', gold = '#F6C445';
+  let acc = t.acc;
+  const firstRow = () => { for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) if (get(buf, x, y)) return y; return SIZE; };
+  if (acc === 'halo' && firstRow() < 3) acc = 'crown';
+  switch (acc) {
+    case 'crown':
+      row([8, 11, 12, 15], top - 3, gold); row([8, 9, 11, 12, 14, 15], top - 2, gold);
+      row([8, 9, 10, 11, 12, 13, 14, 15], top - 1, gold); row([8, 9, 10, 11, 12, 13, 14, 15], top, '#C99A1E');
+      row([11, 12], top - 1, '#E5484D');
+      break;
+    case 'halo': { const y = firstRow() - 3; row([9, 10, 11, 12, 13, 14], y, gold); row([8, 15], y + 1, gold); row([9, 10, 11, 12, 13, 14], y + 2, gold); break; }
+    case 'cap':
+      paint(buf, (x, y) => ell(12, top + 3, rx * 0.8, 4)(x, y) && y < top + 2.5, c);
+      for (let x = 12; x < Math.min(SIZE - 1, 12 + rx * 0.8 + 3); x++) set(buf, x, top + 2, dark);
+      set(buf, 11, top - 1, dark); set(buf, 12, top - 1, dark);
+      break;
+    case 'beanie':
+      paint(buf, (x, y) => ell(12, cy, rx + 0.6, ry + 0.6)(x, y) && y < top + 3, c);
+      paint(buf, (x, y) => ell(12, cy, rx + 0.6, ry + 0.6)(x, y) && y > top + 2 && y < top + 3.5, dark);
+      row([11, 12], top - 2, '#FFFFFF'); row([11, 12], top - 1, '#FFFFFF');
+      break;
+    case 'headphones': {
+      const band = (x, y) => y < cy - 1 && ell(12, cy, rx + 1.6, ry + 1.6)(x, y) && !ell(12, cy, rx + 0.6, ry + 0.6)(x, y);
+      paint(buf, band, dark);
+      paint(buf, mirror((x, y) => x > 12 - rx - 1.6 && x < 12 - rx + 1.2 && y > cy - 2 && y < cy + 2.5), c);
+      break;
+    }
+    case 'flower': {
+      const fx = Math.round(12 - rx * 0.65) - 1, fy = top + 1;
+      for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) set(buf, fx + dx, fy + dy, c);
+      set(buf, fx, fy, gold);
+      break;
+    }
+    case 'bow': {
+      const bx = Math.round(12 + rx * 0.55), by = top + 1;
+      for (const [dx, dy] of [[-2, -1], [-2, 0], [-2, 1], [-1, 0], [0, 0], [1, 0], [2, -1], [2, 0], [2, 1]]) set(buf, bx + dx, by + dy, c);
+      break;
+    }
+    case 'bandaid': {
+      const bx = innerR + 1, by = Math.min(ey + eye.h + 1, headBottom - 2);
+      row([bx, bx + 1, bx + 2], by, '#E9C39B'); row([bx, bx + 1, bx + 2], by + 1, '#E9C39B'); set(buf, bx + 1, by, '#C99A72');
+      break;
+    }
+    case 'shades': {
+      const y0 = ey + Math.max(0, Math.floor(eye.h / 2) - 1);
+      for (let x = innerL - eye.w; x <= innerR + eye.w; x++) { set(buf, x, y0, '#141218'); set(buf, x, y0 + 1, '#141218'); }
+      for (let x = innerL - eye.w + 1; x <= innerL; x++) set(buf, x, y0 + 2, '#141218');
+      for (let x = innerR; x <= innerR + eye.w - 1; x++) set(buf, x, y0 + 2, '#141218');
+      set(buf, innerL - eye.w + 1, y0, '#FFFFFF'); set(buf, innerR, y0, '#FFFFFF');
+      break;
+    }
+    case 'orange':
+      paint(buf, ell(12, top - 1.2, 2.7, 2.2), '#FF9F1C');
+      paint(buf, (x, y) => ell(12, top - 1.2, 2.7, 2.2)(x, y) && !ell(12, top - 1.6, 2.7, 2.2)(x, y), '#E07B00');
+      set(buf, 12, top - 4, '#4CAF50'); set(buf, 13, top - 4, '#4CAF50');
+      break;
+    case 'leaf': set(buf, 9, top, '#3E9B4F'); set(buf, 10, top - 1, '#3E9B4F'); set(buf, 9, top - 1, '#5CC46C'); break;
+  }
+
+  // 11. Outline: every empty pixel touching the animal turns ink.
+  const filled = buf.slice();
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
+    if (filled[y * SIZE + x]) continue;
+    if (get(filled, x - 1, y) || get(filled, x + 1, y) || get(filled, x, y - 1) || get(filled, x, y + 1)) set(buf, x, y, INK);
+  }
+
+  // 12. Shiny sparkles in empty corners.
+  if (t.tier === 'legendary') {
+    for (const [sx, sy] of [[2, 3], [21, 2], [2, 20], [21, 20]]) {
+      const pts = [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]];
+      if (pts.every(([dx, dy]) => !get(buf, sx + dx, sy + dy))) pts.forEach(([dx, dy], i) => set(buf, sx + dx, sy + dy, i ? '#FFF6C9' : '#FFFFFF'));
+    }
+  }
+  return buf;
+}
+
+function draw(canvas, t, opts) {
+  const ctx = canvas.getContext('2d');
+  const buf = render(t, opts);
+  const twoTone = t.tier !== 'common';
+  const [b1, b2] = t.tier === 'legendary' ? ['#E6DBFF', '#C9F2EC'] : [t.bg[1], t.bg2[1]];
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
+    ctx.fillStyle = buf[y * SIZE + x] || (twoTone && x + y >= SIZE ? b2 : b1);
+    ctx.fillRect(x, y, 1, 1);
+  }
+}
+
+const cache = new Map();
+function faceURL(name) {
+  const key = normalize(name);
+  if (!cache.has(key)) {
+    const c = document.createElement('canvas');
+    c.width = c.height = SIZE;
+    draw(c, traitsFor(name));
+    cache.set(key, c.toDataURL());
+  }
+  return cache.get(key);
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, ...kids) => { const n = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); n.append(...kids); return n; };
+const TIER_LABEL = { common: 'Common', rare: 'Rare', epic: 'Epic', legendary: 'Legendary shiny' };
+const EAR_LABEL = { pointy: 'pointy', floppy: 'floppy', long: 'long', round: 'round', bumps: 'eye bumps', tufts: 'tufts', pig: 'folded', gills: 'gills' };
+
+let current = null;
+function showName(name) {
+  const t = traitsFor(name);
+  current = t;
+  draw($('big'), t);
+  $('frame').dataset.tier = t.tier;
+  $('big-name').textContent = name.trim() || 'stranger';
+  $('big-tier').textContent = TIER_LABEL[t.tier];
+  $('big-tier').dataset.tier = t.tier;
+  $('normal').replaceChildren('Seed from ', el('code', {}, t.name || 'stranger'), ` · #${t.seed.toString(16).slice(0, 8)}`);
+  const specs = [
+    ['Animal', `${t.sp.label} (${t.sp.tier})`],
+    ['Colour', t.pal.name],
+    ['Face size', `${t.w} x ${t.h}`],
+    ['Face shape', t.round >= 2.6 ? `boxy ${t.round}` : t.round > 2.2 ? `soft ${t.round}` : `round ${t.round}`],
+    ['Ears', t.sp.ears.size[1] ? `${EAR_LABEL[t.sp.ears.type]}, size ${t.earSize}` : EAR_LABEL[t.sp.ears.type]],
+    ['Eye shape', t.acc === 'shades' ? `${t.eyeShape} (in shades)` : t.eyeShape],
+    ['Eye size', `${t.eyeSize}`],
+    ['Eye spacing', `${t.eyeGap}`],
+    ['Muzzle', t.muzzle ? `${t.muzzle.w} x ${t.muzzle.h}` : 'none'],
+    ['Mouth', t.mouth],
+    ['Markings', `${t.marks}${t.blush ? ', blush' : ''}`],
+    ['Extra', t.acc],
+  ];
+  $('specs').replaceChildren(...specs.map(([k, v]) => el('div', { class: 'spec' }, el('span', { class: 'label' }, k), el('b', {}, v))));
+}
+
+let blinkTimer;
+function startBlink() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  clearInterval(blinkTimer);
+  blinkTimer = setInterval(() => {
+    if (!current) return;
+    draw($('big'), current, { blink: true });
+    setTimeout(() => current && draw($('big'), current), 160);
+  }, 3200);
+}
+
+const STARTERS = ['night_owl', 'maya', 'leo', 'sofia', 'kenji', 'amara', 'noah', 'zara', 'mateo', 'yuki', 'omar', 'lena', 'chai_lover', 'lowkey_luna', 'goblin_mode', 'npc_42', 'main_character', 'sleepy_bean', 'touch_grass', 'aura_farmer', 'vibe_check', 'side_quest', 'delulu_dana', 'no_cap_nina', 'its_giving', 'mid_mike', 'slay_sara', 'rizz_ryan', 'cozy_kai', 'feral_fern', 'snack_attack', 'moon_child'];
+const ADJ = ['sleepy', 'feral', 'cozy', 'lowkey', 'chaotic', 'spicy', 'tiny', 'sus', 'based', 'silly', 'soft', 'glitchy', 'mid', 'goofy', 'unhinged', 'chill'];
+const NOUN = ['bean', 'goblin', 'noodle', 'cloud', 'gremlin', 'potato', 'mango', 'pixel', 'muffin', 'raccoon', 'comet', 'dumpling', 'waffle', 'boba', 'npc', 'yapper'];
+
+function fillWall(names) {
+  $('wall').replaceChildren(...names.map((n) => {
+    const t = traitsFor(n);
+    const b = el('button', { class: 'tile', type: 'button', 'data-tier': t.tier, title: `${n}: ${t.sp.label}, ${TIER_LABEL[t.tier]}` },
+      el('img', { src: faceURL(n), alt: `${t.sp.label} for ${n}` }), el('span', {}, n));
+    b.addEventListener('click', () => { $('name').value = n; showName(n); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    return b;
+  }));
+}
+function randomNames(k) {
+  return Array.from({ length: k }, () => `${ADJ[Math.floor(Math.random() * ADJ.length)]}_${NOUN[Math.floor(Math.random() * NOUN.length)]}${Math.random() < 0.5 ? Math.floor(Math.random() * 99) : ''}`);
+}
+
+function fillTiers() {
+  const found = {};
+  for (let i = 0; i < 5000 && Object.keys(found).length < 4; i++) {
+    const n = `stranger_${i}`;
+    const tier = traitsFor(n).tier;
+    if (!found[tier]) found[tier] = n;
+  }
+  const info = {
+    common: ['75%', 'Flat background, any animal its species allows.'],
+    rare: ['17%', 'Two-tone background.'],
+    epic: ['6%', 'Sparkle eyes and a crown or halo.'],
+    legendary: ['2%', 'Shiny colours nobody else gets, holo frame, sparkles.'],
+  };
+  $('tiers').replaceChildren(...['common', 'rare', 'epic', 'legendary'].map((tier) => el('div', { class: 'tier-card' },
+    el('span', { class: 'tier', 'data-tier': tier }, TIER_LABEL[tier]),
+    el('span', { class: 'odds' }, info[tier][0]),
+    found[tier] ? el('img', { src: faceURL(found[tier]), alt: `${tier} example` }) : '',
+    el('p', {}, info[tier][1], found[tier] ? ` Example: "${found[tier]}".` : ''))));
+}
+
+function fillRules() {
+  const head = el('tr', {}, ...['', 'Animal', 'Tier', 'Face w x h', 'Ears', 'Eye shapes', 'Eye size', 'Eye gap', 'Mouths'].map((h) => el('th', {}, h)));
+  const rows = Object.entries(SPECIES).map(([key, sp]) => {
+    let sample = '';
+    for (let i = 0; i < 400; i++) { const n = `${key}_${i}`; if (traitsFor(n).species === key) { sample = n; break; } }
+    return el('tr', {},
+      el('td', {}, sample ? el('img', { src: faceURL(sample), alt: '' }) : ''),
+      el('td', {}, sp.label),
+      el('td', {}, sp.tier),
+      el('td', { class: 'num' }, `${sp.head.w.join('-')} x ${sp.head.h.join('-')}`),
+      el('td', {}, sp.ears.size[1] ? `${EAR_LABEL[sp.ears.type]} ${sp.ears.size.join('-')}` : EAR_LABEL[sp.ears.type]),
+      el('td', {}, [...new Set(sp.eyes.shapes)].join(', ')),
+      el('td', { class: 'num' }, sp.eyes.size.join('-')),
+      el('td', { class: 'num' }, sp.eyes.gap.join('-')),
+      el('td', {}, [...new Set(sp.mouths)].join(', ')));
+  });
+  $('rules').replaceChildren(el('thead', {}, head), el('tbody', {}, ...rows));
+}
+
+$('name').addEventListener('input', (e) => showName(e.target.value));
+$('shuffle').addEventListener('click', () => fillWall(randomNames(32)));
+showName($('name').value);
+fillWall(STARTERS);
+fillTiers();
+fillRules();
+startBlink();
+</script>
+
+</body></html>
